@@ -45,8 +45,14 @@ export const UnlockModal: React.FC<UnlockModalProps> = ({ open, onClose, onUnloc
     }
   };
 
+  const handleClose = () => {
+    setPassword("");
+    setError(null);
+    onClose();
+  };
+
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth sx={{ zIndex: 1400 }}>
+    <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth sx={{ zIndex: 1400 }}>
       <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1, pb: 1, borderBottom: "1px solid #E2E8F0" }}>
         <Box
           sx={{
@@ -94,7 +100,7 @@ export const UnlockModal: React.FC<UnlockModalProps> = ({ open, onClose, onUnloc
         </DialogContent>
 
         <DialogActions sx={{ px: 3, py: 1, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
-          <Button onClick={onClose} disabled={loading} sx={{ color: "#64748B" }}>
+          <Button onClick={handleClose} disabled={loading} sx={{ color: "#64748B" }}>
             Cancel
           </Button>
           <Button

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -44,12 +45,9 @@ func (s *Server) handleExecuteCustomAPI(w http.ResponseWriter, r *http.Request) 
 
 		if reqToken == "" {
 			reqToken = r.URL.Query().Get("token")
-			if reqToken == "" {
-				reqToken = r.URL.Query().Get("access_token")
-			}
 		}
 
-		if reqToken != token {
+		if subtle.ConstantTimeCompare([]byte(reqToken), []byte(token)) != 1 {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="easy42-custom-api"`)
 			writeError(w, http.StatusUnauthorized, "Unauthorized: invalid or missing bearer token")
 			return

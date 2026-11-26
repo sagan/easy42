@@ -733,6 +733,9 @@ func FormatNftMarkAction(rawMark string) (string, error) {
 		return "", nil
 	}
 	if !strings.Contains(s, "/") {
+		if _, err := parseUint32(s); err != nil {
+			return "", fmt.Errorf("invalid mark value %q: %w", rawMark, err)
+		}
 		return s, nil
 	}
 

@@ -13,6 +13,27 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+type limitedBuffer struct {
+	buf bytes.Buffer
+	max int
+}
+
+func (l *limitedBuffer) Write(p []byte) (int, error) {
+	rem := l.max - l.buf.Len()
+	if rem > 0 {
+		if len(p) > rem {
+			_, _ = l.buf.Write(p[:rem])
+		} else {
+			_, _ = l.buf.Write(p)
+		}
+	}
+	return len(p), nil
+}
+
+func (l *limitedBuffer) String() string {
+	return l.buf.String()
+}
+
 // ExecuteOnNode runs a command on a single node via the SSH ClientPool
 func ExecuteOnNode(ctx context.Context, pool *easySSH.ClientPool, node config.Node, command string, parser string, target string, timeout time.Duration) NodeResult {
 	start := time.Now()
@@ -47,9 +68,11 @@ func ExecuteOnNode(ctx context.Context, pool *easySSH.ClientPool, node config.No
 	}
 	defer session.Close()
 
-	var stdout, stderr bytes.Buffer
-	session.Stdout = &stdout
-	session.Stderr = &stderr
+	const maxLGOutputBytes = 4 * 1024 * 1024
+	stdout := &limitedBuffer{max: maxLGOutputBytes}
+	stderr := &limitedBuffer{max: maxLGOutputBytes}
+	session.Stdout = stdout
+	session.Stderr = stderr
 
 	if timeout <= 0 {
 		timeout = 15 * time.Second

@@ -95,6 +95,11 @@ func (s *Server) handleOAuthToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !s.mgr.GetMCPSettings().Enabled {
+		writeOAuthError(w, http.StatusForbidden, "access_denied", "MCP server is disabled")
+		return
+	}
+
 	if !oauthRateLimiter.allow("token:" + clientIPFromRequest(r)) {
 		writeOAuthError(w, http.StatusTooManyRequests, "temporarily_unavailable", "Too many token requests, please try again later")
 		return
@@ -241,6 +246,11 @@ func (s *Server) handleOAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !s.mgr.GetMCPSettings().Enabled {
+		http.Error(w, "MCP server is disabled", http.StatusForbidden)
+		return
+	}
+
 	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
 	_ = r.ParseForm()
 
@@ -269,7 +279,7 @@ func (s *Server) handleOAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate client_id and redirect_uri against registered clients
-	_, isDynClient, err := s.mcpServer.OAuthServer().ValidateClientRedirect(clientID, redirectURI)
+	clientName, isDynClient, err := s.mcpServer.OAuthServer().ValidateClientRedirect(clientID, redirectURI)
 	if err != nil {
 		http.Error(w, "invalid client_id or redirect_uri: "+err.Error(), http.StatusBadRequest)
 		return
@@ -292,6 +302,9 @@ func (s *Server) handleOAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 	// Check if already authenticated via session cookie
 	isAuthenticated := false
 	cfg := s.mgr.Store().Get()
+	if cfg == nil {
+		cfg, _ = s.mgr.Store().Load()
+	}
 	if cfg != nil {
 		if cookie, err := r.Cookie("easy42_session"); err == nil && cookie.Value != "" {
 			if crypto.VerifySessionToken(cookie.Value, cfg.SessionSecret, cfg.PasswordHash) {
@@ -304,6 +317,12 @@ func (s *Server) handleOAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		action := r.FormValue("action")
 		if action == "deny" {
+			if !isDynClient {
+				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("Authorization denied. You may close this window."))
+				return
+			}
 			redirectWithOAuthError(w, r, redirectURI, "access_denied", "The user denied the authorization request", state)
 			return
 		}
@@ -311,21 +330,28 @@ func (s *Server) handleOAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 		// Verify authentication: either session cookie or password submitted
 		if !isAuthenticated {
 			if !loginRateLimiter.allow("oauth_auth:" + clientIPFromRequest(r)) {
-				renderConsentPage(w, r, clientID, redirectURI, state, scope, codeChallenge, codeChallengeMethod, false, "Too many failed attempts. Please wait a few minutes and try again.")
+				renderConsentPage(w, r, clientID, clientName, redirectURI, state, scope, codeChallenge, codeChallengeMethod, false, "Too many failed attempts. Please wait a few minutes and try again.")
+				return
+			}
+			if cfg == nil {
+				http.Error(w, "Configuration not initialized", http.StatusInternalServerError)
 				return
 			}
 			password := r.FormValue("password")
-			acquireArgon2Slot()
-			valid, _ := crypto.VerifyPassword(password, cfg.PasswordHash)
-			releaseArgon2Slot()
-			if cfg == nil || !valid {
-				renderConsentPage(w, r, clientID, redirectURI, state, scope, codeChallenge, codeChallengeMethod, false, "Invalid master password. Please enter the correct password to authorize.")
+			valid := func() bool {
+				acquireArgon2Slot()
+				defer releaseArgon2Slot()
+				ok, _ := crypto.VerifyPassword(password, cfg.PasswordHash)
+				return ok
+			}()
+			if !valid {
+				renderConsentPage(w, r, clientID, clientName, redirectURI, state, scope, codeChallenge, codeChallengeMethod, false, "Invalid master password. Please enter the correct password to authorize.")
 				return
 			}
 		}
 
-		role := r.FormValue("role")
-		if role != mcp.RoleReadOnly {
+		role := mcp.RoleReadOnly
+		if r.FormValue("role") == mcp.RoleFullControl {
 			role = mcp.RoleFullControl
 		}
 
@@ -349,7 +375,7 @@ func (s *Server) handleOAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// GET: render consent page
-	renderConsentPage(w, r, clientID, redirectURI, state, scope, codeChallenge, codeChallengeMethod, isAuthenticated, "")
+	renderConsentPage(w, r, clientID, clientName, redirectURI, state, scope, codeChallenge, codeChallengeMethod, isAuthenticated, "")
 }
 
 func redirectWithOAuthError(w http.ResponseWriter, r *http.Request, redirectURI, errCode, errDesc, state string) {
@@ -368,12 +394,14 @@ func redirectWithOAuthError(w http.ResponseWriter, r *http.Request, redirectURI,
 	http.Redirect(w, r, u.String(), http.StatusFound)
 }
 
-func renderConsentPage(w http.ResponseWriter, r *http.Request, clientID, redirectURI, state, scope, codeChallenge, method string, isAuth bool, errorMsg string) {
+func renderConsentPage(w http.ResponseWriter, r *http.Request, clientID, clientName, redirectURI, state, scope, codeChallenge, method string, isAuth bool, errorMsg string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	clientName := clientID
-	if clientName == "" || clientName == "easy42-mcp" {
-		clientName = "Google Gemini / AI Agent"
+	if clientName == "" {
+		clientName = clientID
+	}
+	if clientName == "" {
+		clientName = "MCP Client"
 	}
 
 	tmpl := `<!DOCTYPE html>
@@ -461,8 +489,8 @@ func renderConsentPage(w http.ResponseWriter, r *http.Request, clientID, redirec
       <div class="role-select">
         <label for="role">Permission Scope</label>
         <select id="role" name="role">
-          <option value="full_control" selected>Full Control (Manage & Configure)</option>
-          <option value="read_only">Read-Only (Query & Inspect Only)</option>
+          <option value="read_only" selected>Read-Only (Query & Inspect Only)</option>
+          <option value="full_control">Full Control (Manage & Configure)</option>
         </select>
       </div>
 
@@ -526,6 +554,11 @@ func (s *Server) handleOAuthRegister(w http.ResponseWriter, r *http.Request) {
 
 	if s.mcpServer == nil || s.mcpServer.OAuthServer() == nil {
 		http.Error(w, "OAuth server not available", http.StatusInternalServerError)
+		return
+	}
+
+	if !s.mgr.GetMCPSettings().Enabled {
+		writeOAuthError(w, http.StatusForbidden, "access_denied", "MCP server is disabled")
 		return
 	}
 

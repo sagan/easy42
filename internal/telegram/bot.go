@@ -151,6 +151,13 @@ func (s *BotService) startMonitorUnlocked() {
 	go s.monitorLoop(s.stopCh)
 }
 
+func redactTelegramToken(msg, token string) string {
+	if token != "" {
+		msg = strings.ReplaceAll(msg, token, "[REDACTED]")
+	}
+	return msg
+}
+
 // initBotUnlocked creates the bot instance, configures webhooks, commands, menu buttons, and starts monitoring
 func (s *BotService) initBotUnlocked() error {
 	s.stopBotOnlyUnlocked()
@@ -158,9 +165,10 @@ func (s *BotService) initBotUnlocked() error {
 	token := strings.TrimSpace(s.settings.TelegramBotToken)
 	bot, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
+		safeErr := redactTelegramToken(err.Error(), token)
 		s.webhookStatus = "error"
-		s.webhookError = fmt.Sprintf("invalid bot token: %v", err)
-		return fmt.Errorf("failed to initialize telegram bot: %w", err)
+		s.webhookError = fmt.Sprintf("invalid bot token: %s", safeErr)
+		return fmt.Errorf("failed to initialize telegram bot: %s", safeErr)
 	}
 
 	s.bot = bot
@@ -188,9 +196,9 @@ func (s *BotService) initBotUnlocked() error {
 		if err != nil || (resp != nil && !resp.Ok) {
 			errDesc := ""
 			if err != nil {
-				errDesc = err.Error()
+				errDesc = redactTelegramToken(err.Error(), token)
 			} else if resp != nil {
-				errDesc = resp.Description
+				errDesc = redactTelegramToken(resp.Description, token)
 			}
 			s.webhookStatus = "webhook_error"
 			s.webhookError = fmt.Sprintf("failed to set webhook: %s", errDesc)
@@ -1897,13 +1905,13 @@ func (s *BotService) TestConnection(token string, adminID int64, serverURL strin
 
 	bot, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
-		return "", fmt.Errorf("failed to connect to Telegram with provided token: %w", err)
+		return "", fmt.Errorf("failed to connect to Telegram with provided token: %s", redactTelegramToken(err.Error(), token))
 	}
 
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
 	serverInfo := "Not configured"
 	if serverURL != "" {
-		serverInfo = serverURL
+		serverInfo = html.EscapeString(serverURL)
 	}
 
 	testText := fmt.Sprintf(`✅ <b>easy42 Telegram Bot Integration Test</b>

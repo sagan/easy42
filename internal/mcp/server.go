@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"easy42/internal/config"
 	"easy42/internal/engine"
 	"easy42/internal/version"
 
@@ -126,7 +127,11 @@ func NewServer(mgr *engine.Manager) *Server {
 		mcp.WithMIMEType("application/json"),
 	), func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		nodes := mgr.GetNodes()
-		data, _ := json.MarshalIndent(nodes, "", "  ")
+		sanitized := make([]config.Node, len(nodes))
+		for i, n := range nodes {
+			sanitized[i] = sanitizeNodeForMCP(n)
+		}
+		data, _ := json.MarshalIndent(sanitized, "", "  ")
 		return []mcp.ResourceContents{
 			mcp.TextResourceContents{
 				URI:      "easy42://cluster/nodes",
@@ -302,8 +307,13 @@ func (s *Server) AuthMiddleware(next http.Handler) http.Handler {
 			if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
 				scheme = "https"
 			}
-			metaURL := fmt.Sprintf("%s://%s/.well-known/oauth-protected-resource", scheme, r.Host)
-			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer resource_metadata="%s"`, metaURL))
+			host := strings.TrimSpace(r.Host)
+			if host != "" && !strings.ContainsAny(host, "\"\r\n\t /\\<>") {
+				metaURL := fmt.Sprintf("%s://%s/.well-known/oauth-protected-resource", scheme, host)
+				w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer resource_metadata="%s"`, metaURL))
+			} else {
+				w.Header().Set("WWW-Authenticate", "Bearer")
+			}
 			http.Error(w, "Unauthorized: valid Easy42 MCP token required", http.StatusUnauthorized)
 			return
 		}

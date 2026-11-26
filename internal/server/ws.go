@@ -151,6 +151,19 @@ func (h *ClientHub) ClientCount() int {
 	return len(h.clients)
 }
 
+// DisconnectAll closes all active WebSocket client connections (e.g. on logout-all or password change)
+func (h *ClientHub) DisconnectAll() {
+	h.mu.RLock()
+	clients := make([]*ClientConn, 0, len(h.clients))
+	for c := range h.clients {
+		clients = append(clients, c)
+	}
+	h.mu.RUnlock()
+	for _, c := range clients {
+		c.close()
+	}
+}
+
 func (c *ClientConn) close() {
 	c.mu.Lock()
 	defer c.mu.Unlock()

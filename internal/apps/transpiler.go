@@ -829,9 +829,9 @@ func TranspileToOpenRC(appName string, rawUnit *ParsedServiceUnit, optionalEnv .
 
 	sb.WriteString(fmt.Sprintf("command=%s\n", ShellEscape(cmdBin)))
 	if cmdArgs != "" {
-		sb.WriteString(fmt.Sprintf("command_args=\"%s\"\n", cmdArgs))
+		sb.WriteString(fmt.Sprintf("command_args=%s\n", ShellEscape(cmdArgs)))
 		if supervise {
-			sb.WriteString(fmt.Sprintf("command_args_foreground=\"%s\"\n", cmdArgs))
+			sb.WriteString(fmt.Sprintf("command_args_foreground=%s\n", ShellEscape(cmdArgs)))
 		}
 	}
 
@@ -882,7 +882,10 @@ func TranspileToOpenRC(appName string, rawUnit *ParsedServiceUnit, optionalEnv .
 		if stopSec > 0 {
 			signal := "TERM"
 			if unit.KillSignal != "" {
-				signal = strings.TrimPrefix(strings.ToUpper(unit.KillSignal), "SIG")
+				cand := strings.TrimPrefix(strings.ToUpper(strings.TrimSpace(unit.KillSignal)), "SIG")
+				if isSafeSignalName(cand) {
+					signal = cand
+				}
 			}
 			sb.WriteString(fmt.Sprintf("retry=\"%s/%d/KILL/5\"\n", signal, stopSec))
 		}
@@ -930,12 +933,12 @@ func TranspileToOpenRC(appName string, rawUnit *ParsedServiceUnit, optionalEnv .
 	sb.WriteString("    use dns logger\n")
 	var afterList, useList []string
 	for _, dep := range append(append([]string{}, unit.After...), unit.Requires...) {
-		if svc, ok := systemdUnitToOpenRC(dep); ok && svc != "net" {
+		if svc, ok := systemdUnitToOpenRC(dep); ok && svc != "net" && isSafeOpenRCServiceName(svc) {
 			afterList = append(afterList, svc)
 		}
 	}
 	for _, dep := range append(append([]string{}, unit.Wants...), unit.BindsTo...) {
-		if svc, ok := systemdUnitToOpenRC(dep); ok && svc != "net" {
+		if svc, ok := systemdUnitToOpenRC(dep); ok && svc != "net" && isSafeOpenRCServiceName(svc) {
 			useList = append(useList, svc)
 		}
 	}
@@ -949,7 +952,7 @@ func TranspileToOpenRC(appName string, rawUnit *ParsedServiceUnit, optionalEnv .
 	}
 	var beforeList []string
 	for _, dep := range unit.Before {
-		if svc, ok := systemdUnitToOpenRC(dep); ok {
+		if svc, ok := systemdUnitToOpenRC(dep); ok && isSafeOpenRCServiceName(svc) {
 			beforeList = append(beforeList, svc)
 		}
 	}
@@ -1074,13 +1077,54 @@ func dedupe(in []string) []string {
 	return out
 }
 
+func isSafeSignalName(s string) bool {
+	if s == "" || len(s) > 16 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+			return false
+		}
+	}
+	return true
+}
+
+func isSafeOpenRCServiceName(s string) bool {
+	if s == "" || len(s) > 64 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+func isSafeOctalUMask(s string) bool {
+	s = strings.TrimSpace(s)
+	if len(s) < 3 || len(s) > 5 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '7' {
+			return false
+		}
+	}
+	return true
+}
+
 // GenerateOpenRCConfD generates /etc/conf.d/ezapp-<name> with explicit export directives
 func GenerateOpenRCConfD(appName string, envVars map[string]string) string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("# Easy42 environment configuration for ezapp-%s\n", appName))
 	keys := make([]string, 0, len(envVars))
 	for k := range envVars {
-		keys = append(keys, k)
+		if validEnvKeyRegex.MatchString(k) {
+			keys = append(keys, k)
+		}
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
@@ -1207,14 +1251,18 @@ func TranspileToProcd(appName string, rawUnit *ParsedServiceUnit, envVars map[st
 	if len(envVars) > 0 {
 		keys := make([]string, 0, len(envVars))
 		for k := range envVars {
-			keys = append(keys, k)
+			if validEnvKeyRegex.MatchString(k) {
+				keys = append(keys, k)
+			}
 		}
 		sort.Strings(keys)
 		var envParts []string
 		for _, k := range keys {
 			envParts = append(envParts, fmt.Sprintf("%s=%s", k, ShellEscape(envVars[k])))
 		}
-		sb.WriteString(fmt.Sprintf("    procd_set_param env %s\n", strings.Join(envParts, " ")))
+		if len(envParts) > 0 {
+			sb.WriteString(fmt.Sprintf("    procd_set_param env %s\n", strings.Join(envParts, " ")))
+		}
 	}
 
 	sb.WriteString("    procd_close_instance\n")
@@ -1273,11 +1321,11 @@ func procdShellWrapper(unit *ParsedServiceUnit, cmdParts []string) ([]string, bo
 	if unit.WorkingDirectory != "" {
 		script += fmt.Sprintf("cd %s", ShellEscape(unit.WorkingDirectory))
 	}
-	if unit.UMask != "" {
+	if unit.UMask != "" && isSafeOctalUMask(unit.UMask) {
 		if script != "" {
 			script += " && "
 		}
-		script += fmt.Sprintf("umask %s", unit.UMask)
+		script += fmt.Sprintf("umask %s", strings.TrimSpace(unit.UMask))
 	}
 	if script != "" {
 		script += " && "

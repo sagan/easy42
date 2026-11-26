@@ -1534,13 +1534,15 @@ export const NodeDetailPage: React.FC = () => {
             {/* Quick action buttons row */}
             {!node?.is_external && !node?.is_client && (
               <Box sx={{ display: "flex", gap: 1 }}>
-                {!!node?.ip && !!networkSettings?.data?.node_web_terminal_url && (
+                {!!node?.ip &&
+                  typeof networkSettings?.data?.node_web_terminal_url === "string" &&
+                  /^https?:\/\//i.test(networkSettings.data.node_web_terminal_url.trim()) && (
                   <Button
                     variant="outlined"
                     size="small"
                     title="Web Terminal"
                     startIcon={<Terminal size={15} />}
-                    href={(networkSettings?.data?.node_web_terminal_url as string).replace("%i", node.ip)}
+                    href={networkSettings.data.node_web_terminal_url.trim().replace("%i", encodeURIComponent(node.ip))}
                     target="_blank"
                     rel="noopener noreferrer"
                     sx={{

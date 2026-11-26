@@ -4,10 +4,14 @@ import (
 	"bufio"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
-var scriptEnvBlockRegex = regexp.MustCompile(`(?s)\n*### EASY42_ENV_START\n.*?\n### EASY42_ENV_END\n*`)
+var (
+	scriptEnvBlockRegex = regexp.MustCompile(`(?s)\n*### EASY42_ENV_START\n.*?\n### EASY42_ENV_END\n*`)
+	validEnvKeyRegex    = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+)
 
 type scriptEnvVar struct {
 	key string
@@ -38,7 +42,7 @@ func ParseScriptEnvVars(envContent string) []scriptEnvVar {
 				val = val[1 : len(val)-1]
 			}
 		}
-		if key != "" {
+		if validEnvKeyRegex.MatchString(key) {
 			vars = append(vars, scriptEnvVar{key: key, val: val})
 		}
 	}
@@ -76,20 +80,13 @@ func InjectScriptEnvironment(mainContent string, envContent string) string {
 	if isPython {
 		envBlock.WriteString("### EASY42_ENV_START\nimport os\n")
 		for _, v := range envVars {
-			escaped := strings.ReplaceAll(v.val, `\`, `\\`)
-			escaped = strings.ReplaceAll(escaped, `'`, `\'`)
-			envBlock.WriteString(fmt.Sprintf("os.environ['%s'] = '%s'\n", v.key, escaped))
+			envBlock.WriteString(fmt.Sprintf("os.environ[%s] = %s\n", strconv.Quote(v.key), strconv.Quote(v.val)))
 		}
 		envBlock.WriteString("### EASY42_ENV_END")
 	} else {
 		envBlock.WriteString("### EASY42_ENV_START\n")
 		for _, v := range envVars {
-			if strings.ContainsAny(v.val, " \t\n\"'$`\\") {
-				escaped := strings.ReplaceAll(v.val, "'", `'\''`)
-				envBlock.WriteString(fmt.Sprintf("export %s='%s'\n", v.key, escaped))
-			} else {
-				envBlock.WriteString(fmt.Sprintf("export %s=%s\n", v.key, v.val))
-			}
+			envBlock.WriteString(fmt.Sprintf("export %s=%s\n", v.key, ShellEscape(v.val)))
 		}
 		envBlock.WriteString("### EASY42_ENV_END")
 	}

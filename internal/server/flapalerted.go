@@ -29,7 +29,7 @@ func fetchFAMetrics(ctx context.Context, client *http.Client, metricsURL string)
 		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024))
 	if err != nil {
 		return "", err
 	}

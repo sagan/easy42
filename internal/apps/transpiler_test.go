@@ -66,8 +66,9 @@ func TestTranspileToOpenRC(t *testing.T) {
 	if !strings.Contains(openrc, `command='/usr/local/bin/mydaemon'`) {
 		t.Errorf("expected command in OpenRC, got:\n%s", openrc)
 	}
-	if !strings.Contains(openrc, `command_args="'--port' '9000'"`) {
-		t.Errorf("expected command_args in OpenRC, got:\n%s", openrc)
+	expectedCmdArgs := "command_args=" + ShellEscape("'--port' '9000'")
+	if !strings.Contains(openrc, expectedCmdArgs) {
+		t.Errorf("expected %s in OpenRC, got:\n%s", expectedCmdArgs, openrc)
 	}
 	if !strings.Contains(openrc, `command_user='daemon'`) {
 		t.Errorf("expected command_user in OpenRC, got:\n%s", openrc)

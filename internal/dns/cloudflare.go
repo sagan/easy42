@@ -152,7 +152,7 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body an
 	}
 	defer resp.Body.Close()
 
-	respBytes, err := io.ReadAll(resp.Body)
+	respBytes, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
@@ -160,7 +160,11 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body an
 	var cfResp cfResponse[json.RawMessage]
 	if err := json.Unmarshal(respBytes, &cfResp); err != nil {
 		if resp.StatusCode >= 400 {
-			return nil, fmt.Errorf("cloudflare API HTTP error %d: %s", resp.StatusCode, string(respBytes))
+			snippet := string(respBytes)
+			if len(snippet) > 512 {
+				snippet = snippet[:512] + "...(truncated)"
+			}
+			return nil, fmt.Errorf("cloudflare API HTTP error %d: %s", resp.StatusCode, snippet)
 		}
 		return nil, fmt.Errorf("failed to parse cloudflare response: %w", err)
 	}
@@ -194,7 +198,7 @@ func (c *Client) GetZoneName(ctx context.Context) (string, error) {
 		return cached, nil
 	}
 
-	endpoint := fmt.Sprintf("/zones/%s", c.zoneID)
+	endpoint := fmt.Sprintf("/zones/%s", url.PathEscape(c.zoneID))
 	var zone struct {
 		Name string `json:"name"`
 	}
@@ -226,7 +230,7 @@ func (c *Client) ListRecords(ctx context.Context, nameFilter string) ([]DNSRecor
 			params.Set("name", strings.ToLower(strings.TrimSpace(nameFilter)))
 		}
 
-		endpoint := fmt.Sprintf("/zones/%s/dns_records?%s", c.zoneID, params.Encode())
+		endpoint := fmt.Sprintf("/zones/%s/dns_records?%s", url.PathEscape(c.zoneID), params.Encode())
 		var pageRecords []DNSRecord
 		info, err := c.doRequest(ctx, http.MethodGet, endpoint, nil, &pageRecords)
 		if err != nil {
@@ -235,7 +239,7 @@ func (c *Client) ListRecords(ctx context.Context, nameFilter string) ([]DNSRecor
 
 		allRecords = append(allRecords, pageRecords...)
 
-		if info == nil || len(pageRecords) < perPage || page >= info.TotalPages {
+		if info == nil || len(pageRecords) < perPage || page >= info.TotalPages || page >= 1000 {
 			break
 		}
 		page++
@@ -266,7 +270,7 @@ func buildRecordPayload(rec DNSRecord) map[string]any {
 
 // CreateRecord creates a new DNS record
 func (c *Client) CreateRecord(ctx context.Context, rec DNSRecord) (*DNSRecord, error) {
-	endpoint := fmt.Sprintf("/zones/%s/dns_records", c.zoneID)
+	endpoint := fmt.Sprintf("/zones/%s/dns_records", url.PathEscape(c.zoneID))
 	payload := buildRecordPayload(rec)
 
 	var created DNSRecord
@@ -279,7 +283,7 @@ func (c *Client) CreateRecord(ctx context.Context, rec DNSRecord) (*DNSRecord, e
 
 // UpdateRecord updates an existing DNS record
 func (c *Client) UpdateRecord(ctx context.Context, id string, rec DNSRecord) (*DNSRecord, error) {
-	endpoint := fmt.Sprintf("/zones/%s/dns_records/%s", c.zoneID, id)
+	endpoint := fmt.Sprintf("/zones/%s/dns_records/%s", url.PathEscape(c.zoneID), url.PathEscape(id))
 	payload := buildRecordPayload(rec)
 
 	var updated DNSRecord
@@ -292,7 +296,7 @@ func (c *Client) UpdateRecord(ctx context.Context, id string, rec DNSRecord) (*D
 
 // DeleteRecord deletes a DNS record by ID
 func (c *Client) DeleteRecord(ctx context.Context, id string) error {
-	endpoint := fmt.Sprintf("/zones/%s/dns_records/%s", c.zoneID, id)
+	endpoint := fmt.Sprintf("/zones/%s/dns_records/%s", url.PathEscape(c.zoneID), url.PathEscape(id))
 	_, err := c.doRequest(ctx, http.MethodDelete, endpoint, nil, nil)
 	return err
 }

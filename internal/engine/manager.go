@@ -5800,6 +5800,15 @@ func (m *Manager) CreateNetworkPolicy(p config.NetworkPolicy) (*config.NetworkPo
 		}
 	}
 
+	if err := roa.ValidateROAURL(p.ROA4); err != nil {
+		return nil, fmt.Errorf("invalid roa4: %w", err)
+	}
+	if err := roa.ValidateROAURL(p.ROA6); err != nil {
+		return nil, fmt.Errorf("invalid roa6: %w", err)
+	}
+	p.ROA4 = strings.TrimSpace(p.ROA4)
+	p.ROA6 = strings.TrimSpace(p.ROA6)
+
 	p.ID = id
 	p.Name = name
 	p.IsInternal = false
@@ -5862,6 +5871,13 @@ func (m *Manager) UpdateNetworkPolicy(id string, p config.NetworkPolicy) (*confi
 	}
 	if idx == -1 {
 		return nil, fmt.Errorf("network policy %q not found", id)
+	}
+
+	if err := roa.ValidateROAURL(p.ROA4); err != nil {
+		return nil, fmt.Errorf("invalid roa4: %w", err)
+	}
+	if err := roa.ValidateROAURL(p.ROA6); err != nil {
+		return nil, fmt.Errorf("invalid roa6: %w", err)
 	}
 
 	if p.Cost <= 0 {

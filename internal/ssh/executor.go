@@ -315,8 +315,12 @@ func SyncWireGuard(client *ssh.Client, iface string, confPath string) error {
 		return UpWireGuard(client, iface)
 	}
 
+	if confPath == "" || strings.ContainsAny(confPath, "\r\n\x00'\"`$;|&<>") {
+		return fmt.Errorf("invalid wireguard config path: %q", confPath)
+	}
+
 	// Try wg syncconf with stripped config via stdin pipe (POSIX compatible)
-	cmd := fmt.Sprintf("sh -l -c 'wg-quick strip %s | wg syncconf %s /dev/stdin'", confPath, iface)
+	cmd := fmt.Sprintf("sh -l -c 'wg-quick strip \"%s\" | wg syncconf \"%s\" /dev/stdin'", confPath, iface)
 	_, err := RunCommand(client, cmd)
 	if err != nil {
 		// Fallback to restart

@@ -274,6 +274,7 @@ func (s *Server) handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 1*1024*1024)
 	var update tgbotapi.Update
 	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "invalid json payload"})

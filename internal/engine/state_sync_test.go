@@ -1,9 +1,11 @@
 package engine
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -471,24 +473,34 @@ func TestRoaConfigStateSync(t *testing.T) {
 		t.Fatalf("Unlock failed: %v", err)
 	}
 
-	// Create local mock ROA files
-	roa4Path := filepath.Join(tmpDir, "dn42_test_roa4.conf")
-	roa6Path := filepath.Join(tmpDir, "dn42_test_roa6.conf")
+	// Serve mock ROA files over HTTPS
+	var roaMu sync.RWMutex
 	roa4Content := "roa 172.20.0.0/16 max 28 as 4242420000;\n"
 	roa6Content := "roa fd00::/8 max 64 as 4242420000;\n"
-	if err := os.WriteFile(roa4Path, []byte(roa4Content), 0644); err != nil {
-		t.Fatalf("WriteFile roa4 failed: %v", err)
-	}
-	if err := os.WriteFile(roa6Path, []byte(roa6Content), 0644); err != nil {
-		t.Fatalf("WriteFile roa6 failed: %v", err)
-	}
+	roaServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		roaMu.RLock()
+		defer roaMu.RUnlock()
+		switch r.URL.Path {
+		case "/roa4.conf":
+			_, _ = w.Write([]byte(roa4Content))
+		case "/roa6.conf":
+			_, _ = w.Write([]byte(roa6Content))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer roaServer.Close()
+	mgr.roaManager.SetHTTPClient(roaServer.Client())
 
-	// Create custom policy with local ROA files
+	roa4URL := roaServer.URL + "/roa4.conf"
+	roa6URL := roaServer.URL + "/roa6.conf"
+
+	// Create custom policy with HTTPS ROA URLs
 	customPolicy, err := mgr.CreateNetworkPolicy(config.NetworkPolicy{
 		ID:        "roa-net",
 		Name:      "ROA Test Network",
-		ROA4:      roa4Path,
-		ROA6:      roa6Path,
+		ROA4:      roa4URL,
+		ROA6:      roa6URL,
 		ROAStrict: true,
 	})
 	if err != nil {
@@ -608,9 +620,10 @@ func TestRoaConfigStateSync(t *testing.T) {
 
 	// 3. Update ROA file content (simulate upstream update)
 	updatedROA4 := "roa 172.20.0.0/16 max 28 as 4242420000;\nroa 172.21.0.0/16 max 28 as 4242420001;\n"
-	if err := os.WriteFile(roa4Path, []byte(updatedROA4), 0644); err != nil {
-		t.Fatalf("WriteFile updated roa4 failed: %v", err)
-	}
+	roaMu.Lock()
+	roa4Content = updatedROA4
+	roaMu.Unlock()
+	_ = mgr.roaManager.ClearCache()
 
 	actionsAfterUpdate, err := mgr.PlanSync()
 	if err != nil {

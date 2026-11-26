@@ -265,20 +265,29 @@ impl CronScheduler {
                     );
                     // HTTP probes default to a single request: one task run should
                     // not hammer the target URL.
-                    let default_count = if spec.task_type == "http" { 1 } else { 4 };
-                    let count = if spec.count > 0 { spec.count } else { default_count };
+                    let (default_count, max_count) = match spec.task_type.as_str() {
+                        "http" => (1, 5),
+                        "tcp_ping" => (4, 20),
+                        _ => (4, 30),
+                    };
+                    let count = if spec.count > 0 {
+                        spec.count.min(max_count)
+                    } else {
+                        default_count
+                    };
+                    let timeout_seconds = if spec.timeout_seconds > 0 {
+                        spec.timeout_seconds.clamp(1, 60)
+                    } else {
+                        15
+                    };
                     new_tasks.push(ScheduledCronTask {
                         task_id: spec.task_id,
                         name: spec.name,
                         task_type: spec.task_type,
                         cron_expr_str: spec.cron_expr,
                         target: spec.target,
-                        count: count,
-                        timeout_seconds: if spec.timeout_seconds > 0 {
-                            spec.timeout_seconds
-                        } else {
-                            15
-                        },
+                        count,
+                        timeout_seconds,
                         parsed_cron: cron,
                         next_run_secs: next_run,
                     });
@@ -350,16 +359,24 @@ impl CronScheduler {
 
         let (success, exit_code, stdout, stderr) = match task.task_type.as_str() {
             "tcp_ping" => {
-                run_tcp_ping(&task.target, task.count, task.timeout_seconds).await
+                if !crate::validation::is_valid_host_port(&task.target) {
+                    (false, -1, String::new(), format!("invalid tcp_ping target '{}'", task.target))
+                } else {
+                    run_tcp_ping(&task.target, task.count, task.timeout_seconds).await
+                }
             }
             "http" => {
                 run_http_probe(&task.target, task.count, task.timeout_seconds).await
             }
             _ => {
                 // Default: ping
-                let count_str = task.count.to_string();
-                let timeout_str = task.timeout_seconds.to_string();
-                run_cmd("ping", &["-c", &count_str, "-W", &timeout_str, &task.target]).await
+                if !crate::validation::is_valid_host(&task.target) {
+                    (false, -1, String::new(), format!("invalid ping target '{}'", task.target))
+                } else {
+                    let count_str = task.count.to_string();
+                    let timeout_str = task.timeout_seconds.to_string();
+                    run_cmd("ping", &["-c", &count_str, "-W", &timeout_str, "--", &task.target]).await
+                }
             }
         };
 

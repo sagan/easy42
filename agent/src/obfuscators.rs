@@ -89,6 +89,12 @@ fn build_args(spec: &proto::ObfuscatorSpec, binary: &str) -> Result<Vec<String>,
             spec.service_name
         ));
     }
+    if !crate::validation::is_valid_iface_name(&spec.interface_name) {
+        return Err(format!(
+            "invalid obfuscator interface name '{}'",
+            spec.interface_name
+        ));
+    }
     if spec.tun_name.is_empty() || spec.tun_name.len() > 15 || !is_safe_token(&spec.tun_name) {
         return Err(format!("invalid obfuscator TUN name '{}'", spec.tun_name));
     }

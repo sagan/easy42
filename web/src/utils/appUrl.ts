@@ -57,13 +57,33 @@ const MUSTACHE_RE = /\{\{\s*\.?([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g;
 
 type LookupResult = { found: boolean; value: string };
 
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 function globMatches(value: string, pattern: string): boolean {
-  const re = new RegExp(`^${escapeRegExp(pattern).replace(/\\\*/g, ".*").replace(/\\\?/g, ".")}$`);
-  return re.test(value);
+  let vi = 0;
+  let pi = 0;
+  let starIdx = -1;
+  let matchIdx = 0;
+
+  while (vi < value.length) {
+    if (pi < pattern.length && (pattern[pi] === "?" || pattern[pi] === value[vi])) {
+      vi++;
+      pi++;
+    } else if (pi < pattern.length && pattern[pi] === "*") {
+      starIdx = pi;
+      matchIdx = vi;
+      pi++;
+    } else if (starIdx !== -1) {
+      pi = starIdx + 1;
+      matchIdx++;
+      vi = matchIdx;
+    } else {
+      return false;
+    }
+  }
+
+  while (pi < pattern.length && pattern[pi] === "*") {
+    pi++;
+  }
+  return pi === pattern.length;
 }
 
 function removePrefix(value: string, pattern: string, longest: boolean): string {

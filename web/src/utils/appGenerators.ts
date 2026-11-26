@@ -89,11 +89,15 @@ export function cmdlineToSystemd(
       execStart = `/bin/sh -c "${escaped}"`;
     }
 
-    const desc = options?.description?.trim() || `${program} service`;
-    const user = options?.user?.trim() || "root";
-    const workingDir = options?.workingDir?.trim() || "/var/log";
-    const appName = options?.appName?.trim() || "sample";
-    const envFile = options?.envFile !== undefined ? options.envFile : `/etc/systemd/system/ezapp-${appName}.env`;
+    const sanitizeLine = (s: string) => s.replace(/[\r\n]+/g, " ").trim();
+    const desc = sanitizeLine(options?.description?.trim() || `${program} service`);
+    const user = sanitizeLine(options?.user?.trim() || "root");
+    const workingDir = sanitizeLine(options?.workingDir?.trim() || "/var/log");
+    const appName = sanitizeLine(options?.appName?.trim() || "sample");
+    const envFile = sanitizeLine(
+      options?.envFile !== undefined ? options.envFile : `/etc/systemd/system/ezapp-${appName}.env`,
+    );
+    const safeExecStart = sanitizeLine(execStart).replace(/%/g, "%%");
 
     const unitLines: string[] = [
       "[Unit]",
@@ -111,7 +115,7 @@ export function cmdlineToSystemd(
     }
 
     unitLines.push(
-      `ExecStart=${execStart}`,
+      `ExecStart=${safeExecStart}`,
       "Restart=always",
       "RestartSec=5",
       "",

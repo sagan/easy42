@@ -1912,12 +1912,14 @@ export const NodesPage: React.FC = () => {
 
                     {/* Actions */}
                     <Box sx={{ display: "flex", gap: 0.8 }}>
-                      {!!n.ip && !!networkSettings?.data?.node_web_terminal_url && (
+                      {!!n.ip &&
+                        typeof networkSettings?.data?.node_web_terminal_url === "string" &&
+                        /^https?:\/\//i.test(networkSettings.data.node_web_terminal_url.trim()) && (
                         <Tooltip title="Web Terminal">
                           <span>
                             <IconButton
                               size="small"
-                              href={(networkSettings?.data?.node_web_terminal_url as string).replace("%i", n.ip)}
+                              href={networkSettings.data.node_web_terminal_url.trim().replace("%i", encodeURIComponent(n.ip))}
                               target="_blank"
                               rel="noopener noreferrer"
                               sx={{
@@ -2714,12 +2716,14 @@ export const NodesPage: React.FC = () => {
                     )}
 
                     <TableCell align="right">
-                      {!!n.ip && !!networkSettings?.data?.node_web_terminal_url && (
+                      {!!n.ip &&
+                        typeof networkSettings?.data?.node_web_terminal_url === "string" &&
+                        /^https?:\/\//i.test(networkSettings.data.node_web_terminal_url.trim()) && (
                         <Tooltip title="Web Terminal">
                           <span>
                             <IconButton
                               size="small"
-                              href={(networkSettings?.data?.node_web_terminal_url as string).replace("%i", n.ip)}
+                              href={networkSettings.data.node_web_terminal_url.trim().replace("%i", encodeURIComponent(n.ip))}
                               target="_blank"
                               rel="noopener noreferrer"
                               sx={{

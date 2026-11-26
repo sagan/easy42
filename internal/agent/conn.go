@@ -16,18 +16,21 @@ import (
 
 // AgentConnection represents an active WebSocket session with a remote agent
 type AgentConnection struct {
-	nodeName     string
+	nodeName string
+
+	metaMu       sync.RWMutex
 	agentVersion string
 	osInfo       string
 	initSystem   string
 	hostname     string
 	hostsHash    string
 	disableApps  bool
-	ws           *websocket.Conn
-	hub          *Hub
-	sendMu       sync.Mutex
-	closeOnce    sync.Once
-	closed       chan struct{}
+
+	ws        *websocket.Conn
+	hub       *Hub
+	sendMu    sync.Mutex
+	closeOnce sync.Once
+	closed    chan struct{}
 
 	seq uint64
 
@@ -54,32 +57,44 @@ func (c *AgentConnection) NodeName() string {
 
 // AgentVersion returns the reported agent version
 func (c *AgentConnection) AgentVersion() string {
+	c.metaMu.RLock()
+	defer c.metaMu.RUnlock()
 	return c.agentVersion
 }
 
 // Hostname returns the reported agent hostname
 func (c *AgentConnection) Hostname() string {
+	c.metaMu.RLock()
+	defer c.metaMu.RUnlock()
 	return c.hostname
 }
 
 // OSInfo returns the reported operating system info
 func (c *AgentConnection) OSInfo() string {
+	c.metaMu.RLock()
+	defer c.metaMu.RUnlock()
 	return c.osInfo
 }
 
 // InitSystem returns the init system reported by the agent ("systemd", "procd" or "openrc").
 // It is empty for agents that predate the field.
 func (c *AgentConnection) InitSystem() string {
+	c.metaMu.RLock()
+	defer c.metaMu.RUnlock()
 	return c.initSystem
 }
 
 // HostsHash returns the latest reported hosts easy42 block SHA-256 hash
 func (c *AgentConnection) HostsHash() string {
+	c.metaMu.RLock()
+	defer c.metaMu.RUnlock()
 	return c.hostsHash
 }
 
 // DisableApps returns whether the agent disabled app management
 func (c *AgentConnection) DisableApps() bool {
+	c.metaMu.RLock()
+	defer c.metaMu.RUnlock()
 	return c.disableApps
 }
 
@@ -195,12 +210,14 @@ func (c *AgentConnection) handleIncomingMessage(msg *agentpb.AgentMessage) {
 	switch payload := msg.Payload.(type) {
 	case *agentpb.AgentMessage_RegisterReq:
 		req := payload.RegisterReq
+		c.metaMu.Lock()
 		c.agentVersion = req.AgentVersion
 		c.osInfo = req.OsInfo
 		c.initSystem = req.InitSystem
 		c.hostname = req.Hostname
 		c.hostsHash = req.HostsHash
 		c.disableApps = req.DisableApps
+		c.metaMu.Unlock()
 		// Persist the registration metadata so it stays available while the
 		// agent is offline (e.g. after a server restart, before reconnect).
 		// Registry-only data (collected SSH keys and the hashes of the managed
@@ -233,7 +250,9 @@ func (c *AgentConnection) handleIncomingMessage(msg *agentpb.AgentMessage) {
 
 	case *agentpb.AgentMessage_Heartbeat:
 		if payload.Heartbeat.HostsHash != "" {
+			c.metaMu.Lock()
 			c.hostsHash = payload.Heartbeat.HostsHash
+			c.metaMu.Unlock()
 			c.hub.UpdateHostsHash(c.nodeName, payload.Heartbeat.HostsHash)
 		}
 		// Heartbeat response
@@ -247,10 +266,12 @@ func (c *AgentConnection) handleIncomingMessage(msg *agentpb.AgentMessage) {
 		c.hub.RecordHeartbeat(c.nodeName)
 
 	case *agentpb.AgentMessage_Telemetry:
+		c.metaMu.Lock()
 		if payload.Telemetry.HostsHash != "" {
 			c.hostsHash = payload.Telemetry.HostsHash
 		}
 		c.disableApps = payload.Telemetry.DisableApps
+		c.metaMu.Unlock()
 		c.hub.RecordLiveReport(c.nodeName)
 		c.hub.UpdateTelemetry(c.nodeName, payload.Telemetry)
 
@@ -258,7 +279,11 @@ func (c *AgentConnection) handleIncomingMessage(msg *agentpb.AgentMessage) {
 		resp := payload.CommandResp
 		c.pendingMu.Lock()
 		if ch, exists := c.pending[resp.RequestId]; exists {
-			ch <- resp
+			delete(c.pending, resp.RequestId)
+			select {
+			case ch <- resp:
+			default:
+			}
 		}
 		c.pendingMu.Unlock()
 

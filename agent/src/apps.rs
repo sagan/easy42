@@ -13,7 +13,7 @@ use crate::collector::proto::{
     AppActionCmd, AppArtifactFile, AppConfigFile, AppSpec, AppStatus, AppType,
 };
 use crate::container::compose_command;
-use crate::executor::{run_shell, run_shell_with_timeout};
+use crate::executor::{run_cmd, run_shell, run_shell_with_timeout};
 
 pub const DOCKER_BASE_DIR: &str = "/etc/ezappc";
 pub const SYSTEMD_SYSTEM_DIR: &str = "/etc/systemd/system";
@@ -549,6 +549,9 @@ impl AppsManager {
     }
 
     async fn apply_app(&self, app: &AppSpec) -> Result<(), String> {
+        if !crate::validation::is_valid_app_name(&app.name) {
+            return Err(format!("invalid app name '{}'", app.name));
+        }
         let app_type = match AppType::try_from(app.app_type) {
             Ok(t) => t,
             Err(_) => AppType::DockerCompose,
@@ -809,22 +812,22 @@ impl AppsManager {
             .map_err(|e| format!("failed to write systemd env file: {}", e))?;
         let _ = fs::set_permissions(&env_path, fs::Permissions::from_mode(0o600));
 
-        let _ = run_shell("systemctl daemon-reload").await;
+        let _ = run_cmd("systemctl", &["daemon-reload"]).await;
 
         if app.enabled {
             info!("Starting systemd service '{}'...", service_name);
-            let cmd = format!("systemctl enable --now {}", service_name);
-            let (success, code, stdout, stderr) = run_shell(&cmd).await;
+            let (success, code, stdout, stderr) =
+                run_cmd("systemctl", &["enable", "--now", &service_name]).await;
             if !success {
                 return Err(format!(
                     "systemctl enable --now failed (code {}): {} {}",
                     code, stdout, stderr
                 ));
             }
-            let _ = run_shell(&format!("systemctl restart {}", service_name)).await;
+            let _ = run_cmd("systemctl", &["restart", &service_name]).await;
         } else {
             info!("Stopping systemd service '{}'...", service_name);
-            let _ = run_shell(&format!("systemctl stop {}", service_name)).await;
+            let _ = run_cmd("systemctl", &["stop", &service_name]).await;
         }
 
         Ok(())
@@ -845,18 +848,14 @@ impl AppsManager {
             let _ = fs::set_permissions(&conf_path, fs::Permissions::from_mode(0o600));
         }
 
-        let _ = run_shell(&format!(
-            "rc-update add {} default 2>/dev/null",
-            service_name
-        ))
-        .await;
+        let _ = run_cmd("rc-update", &["add", &service_name, "default"]).await;
 
         if app.enabled {
             info!("Restarting OpenRC service '{}'...", service_name);
-            let _ = run_shell(&format!("rc-service {} restart", service_name)).await;
+            let _ = run_cmd("rc-service", &[&service_name, "restart"]).await;
         } else {
             info!("Stopping OpenRC service '{}'...", service_name);
-            let _ = run_shell(&format!("rc-service {} stop", service_name)).await;
+            let _ = run_cmd("rc-service", &[&service_name, "stop"]).await;
         }
 
         Ok(())
@@ -865,19 +864,20 @@ impl AppsManager {
     async fn apply_procd_app(&self, app: &AppSpec) -> Result<(), String> {
         let service_name = format!("ezapp-{}", app.name);
         let init_path = PathBuf::from(PROCD_INIT_DIR).join(&service_name);
+        let init_str = init_path.to_string_lossy().to_string();
 
         fs::write(&init_path, &app.main_content)
             .map_err(|e| format!("failed to write Procd init script: {}", e))?;
         let _ = fs::set_permissions(&init_path, fs::Permissions::from_mode(0o755));
 
-        let _ = run_shell(&format!("/etc/init.d/{} enable 2>/dev/null", service_name)).await;
+        let _ = run_cmd(&init_str, &["enable"]).await;
 
         if app.enabled {
             info!("Restarting Procd service '{}'...", service_name);
-            let _ = run_shell(&format!("/etc/init.d/{} restart", service_name)).await;
+            let _ = run_cmd(&init_str, &["restart"]).await;
         } else {
             info!("Stopping Procd service '{}'...", service_name);
-            let _ = run_shell(&format!("/etc/init.d/{} stop", service_name)).await;
+            let _ = run_cmd(&init_str, &["stop"]).await;
         }
 
         Ok(())
@@ -1003,19 +1003,11 @@ impl AppsManager {
                         let name = file_name
                             .trim_start_matches("ezapp-")
                             .trim_end_matches(".service");
-                        if !desired_names.contains(name) {
+                        if !desired_names.contains(name) && crate::validation::is_valid_app_name(name) {
                             info!("Removing orphaned systemd app '{}'...", name);
                             let service_name = format!("ezapp-{}", name);
-                            let _ = run_shell(&format!(
-                                "systemctl stop {} 2>/dev/null || true",
-                                service_name
-                            ))
-                            .await;
-                            let _ = run_shell(&format!(
-                                "systemctl disable {} 2>/dev/null || true",
-                                service_name
-                            ))
-                            .await;
+                            let _ = run_cmd("systemctl", &["stop", &service_name]).await;
+                            let _ = run_cmd("systemctl", &["disable", &service_name]).await;
                             let _ = fs::remove_file(entry.path());
                             let _ = fs::remove_file(
                                 PathBuf::from(SYSTEMD_SYSTEM_DIR)
@@ -1025,7 +1017,7 @@ impl AppsManager {
                                 &PathBuf::from(APP_DATA_BASE_DIR).join(name),
                                 &[],
                             );
-                            let _ = run_shell("systemctl daemon-reload").await;
+                            let _ = run_cmd("systemctl", &["daemon-reload"]).await;
                         }
                     }
                 }
@@ -1039,37 +1031,22 @@ impl AppsManager {
                     let file_name = entry.file_name().to_string_lossy().to_string();
                     if file_name.starts_with("ezapp-") {
                         let name = file_name.trim_start_matches("ezapp-");
-                        if !desired_names.contains(name) {
+                        if !desired_names.contains(name) && crate::validation::is_valid_app_name(name) {
                             info!("Removing orphaned init app '{}'...", name);
                             let service_name = format!("ezapp-{}", name);
                             match self.init_system {
                                 InitSystem::OpenRC => {
-                                    let _ = run_shell(&format!(
-                                        "rc-service {} stop 2>/dev/null || true",
-                                        service_name
-                                    ))
-                                    .await;
-                                    let _ = run_shell(&format!(
-                                        "rc-update del {} default 2>/dev/null || true",
-                                        service_name
-                                    ))
-                                    .await;
+                                    let _ = run_cmd("rc-service", &[&service_name, "stop"]).await;
+                                    let _ = run_cmd("rc-update", &["del", &service_name, "default"]).await;
                                     let _ = fs::remove_file(entry.path());
                                     let _ = fs::remove_file(
                                         PathBuf::from(OPENRC_CONF_DIR).join(&service_name),
                                     );
                                 }
                                 InitSystem::Procd => {
-                                    let _ = run_shell(&format!(
-                                        "/etc/init.d/{} stop 2>/dev/null || true",
-                                        service_name
-                                    ))
-                                    .await;
-                                    let _ = run_shell(&format!(
-                                        "/etc/init.d/{} disable 2>/dev/null || true",
-                                        service_name
-                                    ))
-                                    .await;
+                                    let init_script = format!("/etc/init.d/{}", service_name);
+                                    let _ = run_cmd(&init_script, &["stop"]).await;
+                                    let _ = run_cmd(&init_script, &["disable"]).await;
                                     let _ = fs::remove_file(entry.path());
                                 }
                                 _ => {}
@@ -1438,6 +1415,16 @@ impl AppsManager {
         &self,
         req: AppActionCmd,
     ) -> (bool, i32, String, String, i64, i64) {
+        if !crate::validation::is_valid_app_name(&req.app_name) {
+            return (
+                false,
+                -1,
+                String::new(),
+                format!("invalid app name '{}'", req.app_name),
+                0,
+                0,
+            );
+        }
         let app_type = match AppType::try_from(req.app_type) {
             Ok(t) => t,
             Err(_) => AppType::DockerCompose,
@@ -1516,13 +1503,17 @@ impl AppsManager {
             }
             AppType::Systemd => {
                 let service = format!("ezapp-{}", req.app_name);
+                let lines_str = lines.to_string();
                 match self.init_system {
                     InitSystem::Systemd => {
-                        let cmd = match action.as_str() {
-                            "start" => format!("systemctl start {}", service),
-                            "stop" => format!("systemctl stop {}", service),
-                            "restart" => format!("systemctl restart {}", service),
-                            "logs" => format!("journalctl -u {} -n {} --no-pager", service, lines),
+                        let (s, c, o, e) = match action.as_str() {
+                            "start" => run_cmd("systemctl", &["start", &service]).await,
+                            "stop" => run_cmd("systemctl", &["stop", &service]).await,
+                            "restart" => run_cmd("systemctl", &["restart", &service]).await,
+                            "logs" => {
+                                run_cmd("journalctl", &["-u", &service, "-n", &lines_str, "--no-pager"])
+                                    .await
+                            }
                             other => {
                                 return (
                                     false,
@@ -1534,15 +1525,14 @@ impl AppsManager {
                                 )
                             }
                         };
-                        let (s, c, o, e) = run_shell(&cmd).await;
                         (s, c, o, e, 0, 0)
                     }
                     InitSystem::OpenRC => {
-                        let cmd = match action.as_str() {
-                            "start" => format!("rc-service {} start", service),
-                            "stop" => format!("rc-service {} stop", service),
-                            "restart" => format!("rc-service {} restart", service),
-                            "logs" => format!("rc-service {} status", service),
+                        let subcmd = match action.as_str() {
+                            "start" => "start",
+                            "stop" => "stop",
+                            "restart" => "restart",
+                            "logs" => "status",
                             other => {
                                 return (
                                     false,
@@ -1554,15 +1544,15 @@ impl AppsManager {
                                 )
                             }
                         };
-                        let (s, c, o, e) = run_shell(&cmd).await;
+                        let (s, c, o, e) = run_cmd("rc-service", &[&service, subcmd]).await;
                         (s, c, o, e, 0, 0)
                     }
                     InitSystem::Procd => {
-                        let cmd = match action.as_str() {
-                            "start" => format!("/etc/init.d/{} start", service),
-                            "stop" => format!("/etc/init.d/{} stop", service),
-                            "restart" => format!("/etc/init.d/{} restart", service),
-                            "logs" => format!("/etc/init.d/{} status", service),
+                        let subcmd = match action.as_str() {
+                            "start" => "start",
+                            "stop" => "stop",
+                            "restart" => "restart",
+                            "logs" => "status",
                             other => {
                                 return (
                                     false,
@@ -1574,7 +1564,8 @@ impl AppsManager {
                                 )
                             }
                         };
-                        let (s, c, o, e) = run_shell(&cmd).await;
+                        let init_script = format!("/etc/init.d/{}", service);
+                        let (s, c, o, e) = run_cmd(&init_script, &[subcmd]).await;
                         (s, c, o, e, 0, 0)
                     }
                 }

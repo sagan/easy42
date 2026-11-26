@@ -14,8 +14,8 @@ echo "IP is $IP"
 	got := InjectScriptEnvironment(main, env)
 
 	expectedBlock := `### EASY42_ENV_START
-export IP=192.168.100.1
-export PORT=8080
+export IP='192.168.100.1'
+export PORT='8080'
 ### EASY42_ENV_END`
 
 	if !strings.Contains(got, expectedBlock) {
@@ -39,8 +39,8 @@ print("Hello Python")
 
 	expectedBlock := `### EASY42_ENV_START
 import os
-os.environ['IP'] = '192.168.100.1'
-os.environ['MSG'] = 'hello world'
+os.environ["IP"] = "192.168.100.1"
+os.environ["MSG"] = "hello world"
 ### EASY42_ENV_END`
 
 	if !strings.Contains(got, expectedBlock) {
@@ -57,7 +57,7 @@ func TestInjectScriptEnvironmentNoShebang(t *testing.T) {
 	env := "IP=10.0.0.1"
 	got := InjectScriptEnvironment(main, env)
 
-	if !strings.HasPrefix(got, "#!/bin/sh\n\n### EASY42_ENV_START\nexport IP=10.0.0.1\n### EASY42_ENV_END") {
+	if !strings.HasPrefix(got, "#!/bin/sh\n\n### EASY42_ENV_START\nexport IP='10.0.0.1'\n### EASY42_ENV_END") {
 		t.Fatalf("expected auto-shebang and env block, got:\n%s", got)
 	}
 }
@@ -77,7 +77,7 @@ echo "run"
 	if strings.Contains(got, "OLD_IP") {
 		t.Fatalf("old env block was not removed:\n%s", got)
 	}
-	if !strings.Contains(got, "export IP=2.2.2.2") {
+	if !strings.Contains(got, "export IP='2.2.2.2'") {
 		t.Fatalf("new env var not found:\n%s", got)
 	}
 	// Verify only one START and END marker

@@ -218,6 +218,23 @@ func (m *Manager) BuildAPIContext(r *http.Request) (map[string]any, error) {
 		cfgCopy.Integrations.TelegramSecretToken = ""
 		cfgCopy.DNS.APIToken = ""
 		cfgCopy.ConfigChanges = nil
+		cfgCopy.AppVariables = nil
+		if len(cfg.CustomAPIs) > 0 {
+			apisCopy := make([]config.CustomAPI, len(cfg.CustomAPIs))
+			copy(apisCopy, cfg.CustomAPIs)
+			for i := range apisCopy {
+				apisCopy[i].Token = ""
+			}
+			cfgCopy.CustomAPIs = apisCopy
+		}
+		if len(cfg.Apps) > 0 {
+			appsCopy := make([]config.App, len(cfg.Apps))
+			copy(appsCopy, cfg.Apps)
+			for i := range appsCopy {
+				appsCopy[i].EnvContent = ""
+			}
+			cfgCopy.Apps = appsCopy
+		}
 		if len(cfg.Nodes) > 0 {
 			nodesCopy := make([]config.Node, len(cfg.Nodes))
 			copy(nodesCopy, cfg.Nodes)
@@ -231,6 +248,8 @@ func (m *Manager) BuildAPIContext(r *http.Request) (map[string]any, error) {
 			copy(linksCopy, cfg.Links)
 			for i := range linksCopy {
 				linksCopy[i].Psk = ""
+				linksCopy[i].From.Psk = ""
+				linksCopy[i].To.Psk = ""
 				linksCopy[i].From.PrivateKey = ""
 				linksCopy[i].To.PrivateKey = ""
 			}

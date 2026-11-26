@@ -17,25 +17,65 @@ pub fn is_valid_node_name(name: &str) -> bool {
         && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
-/// Checks if string is a valid IPv4 address (supports optional /prefix suffix)
+/// Validates app names (1-64 characters, starts with [a-zA-Z0-9], contains only [a-zA-Z0-9_-])
+pub fn is_valid_app_name(name: &str) -> bool {
+    let s = name;
+    if s.is_empty() || s.len() > 64 {
+        return false;
+    }
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_alphanumeric() => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
+/// Checks if string is a valid IPv4 address (supports optional /prefix suffix 0..=32)
 pub fn is_valid_ipv4(s: &str) -> bool {
-    let mut s = s.trim();
-    if let Some(idx) = s.find('/') {
-        s = &s[..idx];
+    let s = s.trim();
+    if let Some((ip_part, prefix_part)) = s.split_once('/') {
+        if prefix_part.is_empty() || !prefix_part.chars().all(|c| c.is_ascii_digit()) {
+            return false;
+        }
+        let Ok(prefix) = prefix_part.parse::<u8>() else {
+            return false;
+        };
+        if prefix > 32 {
+            return false;
+        }
+        Ipv4Addr::from_str(ip_part).is_ok()
+    } else {
+        Ipv4Addr::from_str(s).is_ok()
     }
-    Ipv4Addr::from_str(s).is_ok()
 }
 
-/// Checks if string is a valid IPv6 address (supports optional /prefix suffix)
+/// Checks if string is a valid IPv6 address (supports optional /prefix suffix 0..=128)
 pub fn is_valid_ipv6(s: &str) -> bool {
-    let mut s = s.trim();
-    if let Some(idx) = s.find('/') {
-        s = &s[..idx];
+    let s = s.trim();
+    if let Some((ip_part, prefix_part)) = s.split_once('/') {
+        if prefix_part.is_empty() || !prefix_part.chars().all(|c| c.is_ascii_digit()) {
+            return false;
+        }
+        let Ok(prefix) = prefix_part.parse::<u8>() else {
+            return false;
+        };
+        if prefix > 128 {
+            return false;
+        }
+        Ipv6Addr::from_str(ip_part).is_ok()
+    } else {
+        Ipv6Addr::from_str(s).is_ok()
     }
-    Ipv6Addr::from_str(s).is_ok()
 }
 
-/// Checks if string is a valid IPv4 or IPv6 address
+/// Checks if string is a bare IPv4 or IPv6 address without any /prefix suffix
+pub fn is_valid_plain_ip(s: &str) -> bool {
+    let s = s.trim();
+    Ipv4Addr::from_str(s).is_ok() || Ipv6Addr::from_str(s).is_ok()
+}
+
+/// Checks if string is a valid IPv4 or IPv6 address (with optional CIDR prefix)
 pub fn is_valid_ip(s: &str) -> bool {
     let s = s.trim();
     if is_valid_ipv4(s) {
@@ -64,13 +104,13 @@ pub fn is_valid_domain(domain: &str) -> bool {
     true
 }
 
-/// Checks if a string is a valid IP address or domain name
+/// Checks if a string is a valid bare IP address or domain name
 pub fn is_valid_host(host: &str) -> bool {
     let h = host.trim();
     if h.is_empty() {
         return false;
     }
-    is_valid_ip(h) || is_valid_domain(h)
+    is_valid_plain_ip(h) || is_valid_domain(h)
 }
 
 /// Validates host:port, [ipv6]:port, or domain:port
@@ -83,7 +123,7 @@ pub fn is_valid_host_port(hp: &str) -> bool {
     if s.starts_with('[') {
         if let Some(close_bracket) = s.find(']') {
             let ip_str = &s[1..close_bracket];
-            if !is_valid_ipv6(ip_str) {
+            if Ipv6Addr::from_str(ip_str).is_err() {
                 return false;
             }
             if !s[close_bracket + 1..].starts_with(':') {
@@ -131,8 +171,8 @@ pub fn validate_adhoc_command(cmd: &str) -> Result<(), String> {
         return Err("command cannot be empty".to_string());
     }
 
-    // Must not contain shell metacharacters, quotes, or backslashes
-    if cmd.chars().any(|c| matches!(c, ';' | '&' | '|' | '`' | '$' | '\n' | '\r' | '>' | '<' | '\'' | '"' | '\\')) {
+    // Must not contain shell metacharacters, quotes, backslashes, globs, braces, or tildes
+    if cmd.chars().any(|c| matches!(c, ';' | '&' | '|' | '`' | '$' | '\n' | '\r' | '>' | '<' | '\'' | '"' | '\\' | '*' | '?' | '{' | '}' | '~')) {
         return Err("command contains dangerous shell metacharacters".to_string());
     }
 
@@ -164,18 +204,36 @@ pub fn validate_adhoc_command(cmd: &str) -> Result<(), String> {
             }
         }
         "ping" => {
-            // Disallow flood ping (-f) and cap packet counts
-            for (i, arg) in fields[1..].iter().enumerate() {
-                if *arg == "-f" || arg.starts_with("-f") {
-                    return Err("flood ping flag is not allowed".to_string());
-                }
-                if *arg == "-c" && i + 1 < fields[1..].len() {
-                    if let Ok(count) = fields[1..][i + 1].parse::<u32>() {
-                        if count > 30 {
-                            return Err("ping count exceeds maximum allowed limit of 30".to_string());
+            // Disallow flood ping (-f in any short-flag cluster), interval (-i), and cap packet counts
+            let args = &fields[1..];
+            let mut i = 0;
+            while i < args.len() {
+                let arg = args[i];
+                if arg.starts_with('-') && !arg.starts_with("--") {
+                    let flags = &arg[1..];
+                    if flags.contains('f') {
+                        return Err("flood ping flag is not allowed".to_string());
+                    }
+                    if flags.starts_with('i') {
+                        return Err("ping interval flag (-i) is not allowed".to_string());
+                    }
+                    if flags == "c" {
+                        if i + 1 >= args.len() {
+                            return Err("ping -c requires a count".to_string());
+                        }
+                        match args[i + 1].parse::<u32>() {
+                            Ok(count) if (1..=30).contains(&count) => {}
+                            _ => return Err("ping count must be between 1 and 30".to_string()),
+                        }
+                        i += 1;
+                    } else if let Some(rest) = flags.strip_prefix('c') {
+                        match rest.parse::<u32>() {
+                            Ok(count) if (1..=30).contains(&count) => {}
+                            _ => return Err("ping count must be between 1 and 30".to_string()),
                         }
                     }
                 }
+                i += 1;
             }
         }
         "ip" => {

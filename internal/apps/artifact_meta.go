@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"easy42/internal/config"
 )
 
 // AppArtifactMeta contains metadata for a cached app artifact across versions and architectures
@@ -117,6 +119,9 @@ func (m *ArtifactManager) getAppMetaPath(appName string) string {
 
 // LoadAppMeta loads persistent metadata for an app from disk
 func (m *ArtifactManager) LoadAppMeta(appName string) (*AppArtifactMeta, error) {
+	if err := config.ValidateAppName(strings.TrimSpace(appName)); err != nil {
+		return nil, fmt.Errorf("invalid app name: %w", err)
+	}
 	metaMu.RLock()
 	defer metaMu.RUnlock()
 

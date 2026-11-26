@@ -9,11 +9,20 @@ interface MarkdownViewProps {
   sx?: SxProps<Theme>;
 }
 
+function escapeHtmlAttr(val: string): string {
+  return val
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 // Custom renderer to ensure safe external links with target="_blank"
 const renderer = new marked.Renderer();
 renderer.link = ({ href, title, text }) => {
-  const cleanHref = href || "#";
-  const titleAttr = title ? ` title="${title}"` : "";
+  const cleanHref = escapeHtmlAttr(href || "#");
+  const titleAttr = title ? ` title="${escapeHtmlAttr(title)}"` : "";
   return `<a href="${cleanHref}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
 };
 

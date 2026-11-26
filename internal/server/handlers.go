@@ -21,12 +21,28 @@ import (
 
 func (s *Server) handleGetVersion(w http.ResponseWriter, r *http.Request) {
 	info := version.GetInfo()
-	if s.listen != "" {
-		info.ListenAddress = s.listen
-	}
+	authed := false
 	if s.mgr != nil && s.mgr.Store() != nil {
-		info.DataDir = s.mgr.Store().DataDir()
-		info.ConfigFile = s.mgr.Store().ConfigFile()
+		if cfg := s.mgr.Store().Get(); cfg != nil {
+			var tok string
+			if cookie, err := r.Cookie("easy42_session"); err == nil && cookie.Value != "" {
+				tok = cookie.Value
+			} else if authHeader := r.Header.Get("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
+				tok = strings.TrimPrefix(authHeader, "Bearer ")
+			}
+			if tok != "" && crypto.VerifySessionToken(tok, cfg.SessionSecret, cfg.PasswordHash) {
+				authed = true
+			}
+		}
+	}
+	if authed {
+		if s.listen != "" {
+			info.ListenAddress = s.listen
+		}
+		if s.mgr != nil && s.mgr.Store() != nil {
+			info.DataDir = s.mgr.Store().DataDir()
+			info.ConfigFile = s.mgr.Store().ConfigFile()
+		}
 	}
 	writeJSON(w, http.StatusOK, info)
 }
@@ -72,9 +88,11 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	acquireArgon2Slot()
-	valid, err := crypto.VerifyPassword(req.Password, cfg.PasswordHash)
-	releaseArgon2Slot()
+	valid, err := func() (bool, error) {
+		acquireArgon2Slot()
+		defer releaseArgon2Slot()
+		return crypto.VerifyPassword(req.Password, cfg.PasswordHash)
+	}()
 	if err != nil || !valid {
 		writeError(w, http.StatusUnauthorized, "Invalid password")
 		return
@@ -160,13 +178,23 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request) {
+	if !loginRateLimiter.allow("unlock:" + clientIPFromRequest(r)) {
+		writeError(w, http.StatusTooManyRequests, "Too many unlock attempts. Please wait a few minutes and try again.")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	if err := s.mgr.Unlock(req.Password); err != nil {
+	err := func() error {
+		acquireArgon2Slot()
+		defer releaseArgon2Slot()
+		return s.mgr.Unlock(req.Password)
+	}()
+	if err != nil {
 		writeError(w, http.StatusUnauthorized, "Invalid password")
 		return
 	}
@@ -214,6 +242,11 @@ type changePasswordRequest struct {
 }
 
 func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	if !loginRateLimiter.allow("change_password:" + clientIPFromRequest(r)) {
+		writeError(w, http.StatusTooManyRequests, "Too many password change attempts. Please wait a few minutes and try again.")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
 	var req changePasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
@@ -229,9 +262,19 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.mgr.ChangePassword(oldPass, req.NewPassword); err != nil {
+	err := func() error {
+		acquireArgon2Slot()
+		defer releaseArgon2Slot()
+		return s.mgr.ChangePassword(oldPass, req.NewPassword)
+	}()
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+
+	// Disconnect existing WebSocket sessions after password change
+	if s.wsHub != nil {
+		s.wsHub.DisconnectAll()
 	}
 
 	// Update session cookie for current user with new password hash
@@ -257,6 +300,10 @@ func (s *Server) handleLogoutAll(w http.ResponseWriter, r *http.Request) {
 	if err := s.mgr.ResetSessionSecret(); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to reset session secret: "+err.Error())
 		return
+	}
+
+	if s.wsHub != nil {
+		s.wsHub.DisconnectAll()
 	}
 
 	// Clear session cookie
@@ -1459,6 +1506,11 @@ type revealLinkPskRequest struct {
 }
 
 func (s *Server) handleRevealLinkPsk(w http.ResponseWriter, r *http.Request) {
+	if !loginRateLimiter.allow("reveal_secret:" + clientIPFromRequest(r)) {
+		writeError(w, http.StatusTooManyRequests, "Too many attempts. Please wait a few minutes and try again.")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
 	var req revealLinkPskRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request payload")
@@ -1473,7 +1525,11 @@ func (s *Server) handleRevealLinkPsk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	psk, err := s.mgr.RevealLinkPsk(req.From, req.To, req.Interface, req.Password)
+	psk, err := func() (string, error) {
+		acquireArgon2Slot()
+		defer releaseArgon2Slot()
+		return s.mgr.RevealLinkPsk(req.From, req.To, req.Interface, req.Password)
+	}()
 	if err != nil {
 		if err.Error() == "invalid password" {
 			writeError(w, http.StatusUnauthorized, "Invalid password")
@@ -1549,6 +1605,11 @@ type revealLinkPrivateKeyRequest struct {
 }
 
 func (s *Server) handleRevealLinkPrivateKey(w http.ResponseWriter, r *http.Request) {
+	if !loginRateLimiter.allow("reveal_secret:" + clientIPFromRequest(r)) {
+		writeError(w, http.StatusTooManyRequests, "Too many attempts. Please wait a few minutes and try again.")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
 	var req revealLinkPrivateKeyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request payload")
@@ -1566,7 +1627,11 @@ func (s *Server) handleRevealLinkPrivateKey(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	privKey, pubKey, err := s.mgr.RevealLinkPrivateKey(req.From, req.To, req.Node, req.Interface, req.Password)
+	privKey, pubKey, err := func() (string, string, error) {
+		acquireArgon2Slot()
+		defer releaseArgon2Slot()
+		return s.mgr.RevealLinkPrivateKey(req.From, req.To, req.Node, req.Interface, req.Password)
+	}()
 	if err != nil {
 		if err.Error() == "invalid password" {
 			writeError(w, http.StatusUnauthorized, "Invalid password")

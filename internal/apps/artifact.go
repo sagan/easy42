@@ -764,6 +764,16 @@ func (m *ArtifactManager) CachedArtifact(app config.App, nodeArch, osName, endia
 	}
 
 	// Legacy layout: extracted files on disk without metadata.
+	if err := config.ValidateAppName(app.Name); err != nil {
+		return nil, fmt.Errorf("invalid app name: %w", err)
+	}
+	if err := config.ValidateSafePathSegment(version, "version"); err != nil {
+		return nil, err
+	}
+	if err := config.ValidateSafePathSegment(arch, "arch"); err != nil {
+		return nil, err
+	}
+
 	destDir := filepath.Join(m.CacheDir, "extracted", app.Name, version, arch)
 	for _, reqFile := range app.Artifact.Files {
 		if _, err := os.Stat(filepath.Join(destDir, reqFile.Name)); err != nil {
@@ -778,6 +788,16 @@ func (m *ArtifactManager) CachedArtifact(app config.App, nodeArch, osName, endia
 }
 
 func (m *ArtifactManager) doEnsureArtifact(ctx context.Context, app config.App, version, arch, osName, endian string, globalVars map[string]string) (map[string]*ExtractedFileInfo, error) {
+	if err := config.ValidateAppName(app.Name); err != nil {
+		return nil, fmt.Errorf("invalid app name: %w", err)
+	}
+	if err := config.ValidateSafePathSegment(version, "version"); err != nil {
+		return nil, err
+	}
+	if err := config.ValidateSafePathSegment(arch, "arch"); err != nil {
+		return nil, err
+	}
+
 	destDir := filepath.Join(m.CacheDir, "extracted", app.Name, version, arch)
 
 	// Check persistent metadata
@@ -1000,6 +1020,16 @@ func (m *ArtifactManager) EnsurePhysicalFile(ctx context.Context, app config.App
 		osName = "linux"
 	}
 
+	if err := config.ValidateAppName(app.Name); err != nil {
+		return fmt.Errorf("invalid app name: %w", err)
+	}
+	if err := config.ValidateSafePathSegment(version, "version"); err != nil {
+		return err
+	}
+	if err := config.ValidateSafePathSegment(arch, "arch"); err != nil {
+		return err
+	}
+
 	destDir := filepath.Join(m.CacheDir, "extracted", app.Name, version, arch)
 	allExist := true
 	for _, reqFile := range app.Artifact.Files {
@@ -1034,6 +1064,16 @@ func (m *ArtifactManager) ValidateArtifact(ctx context.Context, app config.App, 
 	arch = ResolveMipsEndianness(arch, endian)
 	if osName == "" {
 		osName = "linux"
+	}
+
+	if err := config.ValidateAppName(app.Name); err != nil {
+		return nil, fmt.Errorf("invalid app name: %w", err)
+	}
+	if err := config.ValidateSafePathSegment(version, "version"); err != nil {
+		return nil, err
+	}
+	if err := config.ValidateSafePathSegment(arch, "arch"); err != nil {
+		return nil, err
 	}
 
 	// 1. Resolve upstream artifact
@@ -1181,8 +1221,8 @@ func (m *ArtifactManager) ValidateArtifact(ctx context.Context, app config.App, 
 // while keeping the metadata file intact so node sync can continue seamlessly.
 func (m *ArtifactManager) ClearAppCache(appName string) (*ArtifactClearCacheResult, error) {
 	appName = strings.TrimSpace(appName)
-	if appName == "" {
-		return nil, fmt.Errorf("app name cannot be empty")
+	if err := config.ValidateAppName(appName); err != nil {
+		return nil, fmt.Errorf("invalid app name: %w", err)
 	}
 
 	freedBytes := m.CalculateAppDiskUsage(appName)
@@ -1335,6 +1375,11 @@ func (m *ArtifactManager) GetAppCacheStatus(app config.App) (*AppArtifactStatus,
 }
 
 func (m *ArtifactManager) flushArchFiles(appName, version, arch string) {
+	if config.ValidateAppName(appName) != nil ||
+		config.ValidateSafePathSegment(version, "version") != nil ||
+		config.ValidateSafePathSegment(arch, "arch") != nil {
+		return
+	}
 	_ = os.RemoveAll(filepath.Join(m.CacheDir, "extracted", appName, version, arch))
 	// Remove matching archive file
 	archivesDir := filepath.Join(m.CacheDir, "archives", appName, version)

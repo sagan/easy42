@@ -35,7 +35,6 @@ fn is_allowed_config_path(path: &Path) -> bool {
     if p_str == "/etc/easy42.nft"
         || p_str == "/etc/bird_easy42.conf"
         || p_str == "/etc/bird_easy42_dynamic.conf"
-        || p_str == "/etc/easy42/agent.json"
     {
         return true;
     }
@@ -67,7 +66,8 @@ fn is_allowed_config_path(path: &Path) -> bool {
         }
     }
 
-    // 4. Temporary test directory (for test suites)
+    // 4. Temporary test directory (only enabled for unit tests)
+    #[cfg(test)]
     if p_str.starts_with("/tmp/") {
         return true;
     }
@@ -504,28 +504,64 @@ impl CommandExecutor {
                 run_cmd("wg-quick", &["up", &iface]).await
             }
             proto::manage_interface::Action::SyncWg => {
+                let expected_conf = format!("/etc/wireguard/{}.conf", iface);
                 let conf_file = if req.config_file.is_empty() {
-                    format!("/etc/wireguard/{}.conf", iface)
+                    expected_conf.clone()
                 } else {
                     req.config_file
                 };
-                let conf_path = Path::new(&conf_file);
-                if !is_allowed_config_path(conf_path) {
+                if conf_file != expected_conf {
                     return (
                         false,
                         -1,
                         String::new(),
-                        format!("config path '{}' not allowed by agent security policy", conf_file),
+                        format!("config path '{}' not allowed for interface '{}'", conf_file, iface),
                     );
                 }
                 let check_up = tokio::process::Command::new("ip").args(["link", "show", &iface]).output().await;
                 let is_up = check_up.map(|o| o.status.success()).unwrap_or(false);
                 if is_up {
-                    run_shell(&format!(
-                        "(wg-quick strip \"{conf}\" | wg syncconf \"{iface}\" /dev/stdin) 2>&1 || (wg-quick down \"{iface}\" 2>/dev/null; wg-quick up \"{iface}\")",
-                        conf = conf_file,
-                        iface = iface
-                    )).await
+                    let strip_out = tokio::process::Command::new("wg-quick")
+                        .args(["strip", &conf_file])
+                        .output()
+                        .await;
+                    let synced = match strip_out {
+                        Ok(out) if out.status.success() => {
+                            let mut child = match tokio::process::Command::new("wg")
+                                .args(["syncconf", &iface, "/dev/stdin"])
+                                .stdin(std::process::Stdio::piped())
+                                .stdout(std::process::Stdio::piped())
+                                .stderr(std::process::Stdio::piped())
+                                .spawn()
+                            {
+                                Ok(c) => c,
+                                Err(_) => {
+                                    let _ = run_cmd("wg-quick", &["down", &iface]).await;
+                                    return run_cmd("wg-quick", &["up", &iface]).await;
+                                }
+                            };
+                            if let Some(mut stdin) = child.stdin.take() {
+                                use tokio::io::AsyncWriteExt;
+                                let _ = stdin.write_all(&out.stdout).await;
+                            }
+                            match child.wait_with_output().await {
+                                Ok(res) if res.status.success() => Some((
+                                    true,
+                                    0,
+                                    String::from_utf8_lossy(&res.stdout).to_string(),
+                                    String::from_utf8_lossy(&res.stderr).to_string(),
+                                )),
+                                _ => None,
+                            }
+                        }
+                        _ => None,
+                    };
+                    if let Some(res) = synced {
+                        res
+                    } else {
+                        let _ = run_cmd("wg-quick", &["down", &iface]).await;
+                        run_cmd("wg-quick", &["up", &iface]).await
+                    }
                 } else {
                     run_cmd("wg-quick", &["up", &iface]).await
                 }
@@ -572,8 +608,7 @@ impl CommandExecutor {
         } else {
             &req.script_path
         };
-        let script_path = Path::new(script);
-        if !is_allowed_config_path(script_path) {
+        if script != "/etc/easy42.nft" {
             return (
                 false,
                 -1,
@@ -581,6 +616,7 @@ impl CommandExecutor {
                 format!("script path '{}' not allowed by agent security policy", script),
             );
         }
+        let script_path = Path::new(script);
         if let Ok(metadata) = fs::metadata(script_path) {
             let mut perms = metadata.permissions();
             perms.set_mode(0o755);
@@ -1270,10 +1306,12 @@ pub(crate) async fn run_tcp_ping(target: &str, count: u32, timeout_secs: u32) ->
     };
 
     // Build structured JSON output matching TCPPingResult on the server side
+    let target_json = serde_json::to_string(target).unwrap_or_else(|_| "\"\"".to_string());
+    let addr_json = serde_json::to_string(&addr.to_string()).unwrap_or_else(|_| "\"\"".to_string());
     let mut json = format!(
-        r#"{{"target":"{target}","resolved_addr":"{addr}","packets_sent":{ps},"packets_received":{pr},"packet_loss_pct":{loss:.2},"min_rtt_ms":{min:.3},"avg_rtt_ms":{avg:.3},"max_rtt_ms":{max:.3},"mdev_rtt_ms":{mdev:.3},"rtts":[{rtts_json}]"#,
-        target = target,
-        addr = addr,
+        r#"{{"target":{target},"resolved_addr":{addr},"packets_sent":{ps},"packets_received":{pr},"packet_loss_pct":{loss:.2},"min_rtt_ms":{min:.3},"avg_rtt_ms":{avg:.3},"max_rtt_ms":{max:.3},"mdev_rtt_ms":{mdev:.3},"rtts":[{rtts_json}]"#,
+        target = target_json,
+        addr = addr_json,
         ps = packets_sent,
         pr = packets_received,
         loss = loss_pct,
@@ -1601,7 +1639,7 @@ mod tests {
         assert!(is_allowed_config_path(Path::new("/etc/easy42.nft")));
         assert!(is_allowed_config_path(Path::new("/etc/bird_easy42.conf")));
         assert!(is_allowed_config_path(Path::new("/etc/bird_easy42_dynamic.conf")));
-        assert!(is_allowed_config_path(Path::new("/etc/easy42/agent.json")));
+        assert!(!is_allowed_config_path(Path::new("/etc/easy42/agent.json")));
 
         // Valid WireGuard configs
         assert!(is_allowed_config_path(Path::new("/etc/wireguard/wg42_node1.conf")));

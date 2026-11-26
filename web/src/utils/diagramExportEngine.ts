@@ -1,3 +1,4 @@
+import DOMPurify from "dompurify";
 import { Node, Link, NetworkPolicy, GraphBlock } from "../types/api";
 import { getEffectiveLinkCost } from "./cost";
 import { isManualLink, isVirtualLink } from "./link";
@@ -38,10 +39,13 @@ const BLOCK_PALETTE: Record<string, string> = {
   slate: "#64748B",
 };
 
+const SAFE_HEX_COLOR_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+
 function resolveBlockColor(colorStr?: string): string {
   if (!colorStr) return "#6366F1";
-  if (colorStr.startsWith("#")) return colorStr;
-  const lower = colorStr.toLowerCase();
+  const trimmed = colorStr.trim();
+  if (SAFE_HEX_COLOR_RE.test(trimmed)) return trimmed;
+  const lower = trimmed.toLowerCase();
   return BLOCK_PALETTE[lower] || "#6366F1";
 }
 
@@ -367,14 +371,15 @@ export function generateTopologySvg(
       <text x="${cb.x + cb.width - 61}" y="${cb.y + 24.5}" font-size="9.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="700" fill="#047857">Full Mesh</text>`;
       }
 
+      const safeColor = escapeXml(cb.color);
       blocksSvg += `    <g class="block-group" id="block-${escapeXml(cb.id)}">
       <!-- Container background -->
-      <rect x="${cb.x}" y="${cb.y}" width="${cb.width}" height="${cb.height}" rx="14" fill="${cb.color}" fill-opacity="0.04" stroke="${cb.color}" stroke-width="1.8" stroke-dasharray="6 4" stroke-opacity="0.75" />
+      <rect x="${cb.x}" y="${cb.y}" width="${cb.width}" height="${cb.height}" rx="14" fill="${safeColor}" fill-opacity="0.04" stroke="${safeColor}" stroke-width="1.8" stroke-dasharray="6 4" stroke-opacity="0.75" />
       
       <!-- Group Title Pill -->
-      <rect x="${cb.x + 14}" y="${cb.y + 10}" width="${headerPillW}" height="22" rx="6" fill="#FFFFFF" stroke="${cb.color}" stroke-width="1.2" stroke-opacity="0.5" filter="url(#badge-shadow)" />
-      <circle cx="${cb.x + 24}" cy="${cb.y + 21}" r="3.5" fill="${cb.color}" />
-      <text x="${cb.x + 33}" y="${cb.y + 24.5}" font-size="11" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="700" fill="${cb.color}">${escapeXml(displayName)}</text>${fullMeshBadgeSvg}
+      <rect x="${cb.x + 14}" y="${cb.y + 10}" width="${headerPillW}" height="22" rx="6" fill="#FFFFFF" stroke="${safeColor}" stroke-width="1.2" stroke-opacity="0.5" filter="url(#badge-shadow)" />
+      <circle cx="${cb.x + 24}" cy="${cb.y + 21}" r="3.5" fill="${safeColor}" />
+      <text x="${cb.x + 33}" y="${cb.y + 24.5}" font-size="11" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="700" fill="${safeColor}">${escapeXml(displayName)}</text>${fullMeshBadgeSvg}
     </g>\n`;
     });
   }
@@ -789,9 +794,15 @@ export async function exportDiagramFile(
 
   // If opening in a new tab, open the tab immediately during the user gesture to avoid popup blockers
   const newTab = action === "new_tab" ? window.open("about:blank", "_blank") : null;
+  if (newTab) {
+    newTab.opener = null;
+  }
 
   try {
-    const svgString = generateTopologySvg(nodes, links, blocks, nodeBlockMap, networkPolicies, options);
+    const rawSvg = generateTopologySvg(nodes, links, blocks, nodeBlockMap, networkPolicies, options);
+    const svgString = DOMPurify.sanitize(rawSvg, {
+      USE_PROFILES: { svg: true, svgFilters: true },
+    });
     const blob =
       options.format === "svg"
         ? new Blob([svgString], { type: "image/svg+xml;charset=utf-8" })
@@ -803,7 +814,7 @@ export async function exportDiagramFile(
       if (newTab) {
         newTab.location.href = url;
       } else {
-        window.open(url, "_blank");
+        window.open(url, "_blank", "noopener,noreferrer");
       }
       setTimeout(() => URL.revokeObjectURL(url), 60000);
     } else {

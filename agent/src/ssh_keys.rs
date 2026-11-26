@@ -196,16 +196,18 @@ impl ParsedKey {
 fn public_key_len(algorithm: &str, data: &[u8]) -> Option<usize> {
     let mut pos = 0usize;
     let field = |pos: &mut usize| -> Option<&[u8]> {
-        if data.len() < *pos + 4 {
+        let len_end = pos.checked_add(4)?;
+        if data.len() < len_end {
             return None;
         }
-        let len = u32::from_be_bytes(data[*pos..*pos + 4].try_into().ok()?) as usize;
-        *pos += 4;
-        if data.len() < *pos + len {
+        let len = u32::from_be_bytes(data[*pos..len_end].try_into().ok()?) as usize;
+        *pos = len_end;
+        let end = pos.checked_add(len)?;
+        if data.len() < end {
             return None;
         }
-        let f = &data[*pos..*pos + len];
-        *pos += len;
+        let f = &data[*pos..end];
+        *pos = end;
         Some(f)
     };
 
@@ -762,16 +764,18 @@ fn point_add(
 }
 
 fn read_ssh_string<'a>(data: &'a [u8], pos: &mut usize) -> Option<&'a [u8]> {
-    if data.len() < *pos + 4 {
+    let len_end = pos.checked_add(4)?;
+    if data.len() < len_end {
         return None;
     }
-    let len = u32::from_be_bytes(data[*pos..*pos + 4].try_into().ok()?) as usize;
-    *pos += 4;
-    if data.len() < *pos + len {
+    let len = u32::from_be_bytes(data[*pos..len_end].try_into().ok()?) as usize;
+    *pos = len_end;
+    let end = pos.checked_add(len)?;
+    if data.len() < end {
         return None;
     }
-    let s = &data[*pos..*pos + len];
-    *pos += len;
+    let s = &data[*pos..end];
+    *pos = end;
     Some(s)
 }
 
@@ -1003,16 +1007,18 @@ pub fn dropbear_public_key(file: &[u8], algorithm: &str) -> Option<String> {
 /// Reads one SSH length-prefixed string from `data` at `*pos`, advancing `*pos`
 /// past it. Returns `None` when the field is truncated.
 fn read_ssh_field<'a>(data: &'a [u8], pos: &mut usize) -> Option<&'a [u8]> {
-    if data.len() < *pos + 4 {
+    let len_end = pos.checked_add(4)?;
+    if data.len() < len_end {
         return None;
     }
-    let len = u32::from_be_bytes(data[*pos..*pos + 4].try_into().ok()?) as usize;
-    *pos += 4;
-    if data.len() < *pos + len {
+    let len = u32::from_be_bytes(data[*pos..len_end].try_into().ok()?) as usize;
+    *pos = len_end;
+    let end = pos.checked_add(len)?;
+    if data.len() < end {
         return None;
     }
-    let field = &data[*pos..*pos + len];
-    *pos += len;
+    let field = &data[*pos..end];
+    *pos = end;
     Some(field)
 }
 

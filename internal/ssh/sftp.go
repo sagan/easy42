@@ -1,6 +1,7 @@
 package ssh
 
 import (
+	"crypto/rand"
 	"fmt"
 	"io"
 	"os"
@@ -34,14 +35,20 @@ func AtomicWriteFile(client *sftp.Client, targetPath string, content []byte, per
 		// Ignore error if directory already exists
 	}
 
-	tmpPath := filepath.Join(dir, fmt.Sprintf(".%s.tmp", base))
-
-	// Remove old tmp file if exists
-	_ = client.Remove(tmpPath)
+	var randBuf [8]byte
+	_, _ = rand.Read(randBuf[:])
+	tmpPath := filepath.Join(dir, fmt.Sprintf(".%s.%x.tmp", base, randBuf))
 
 	tmpFile, err := client.OpenFile(tmpPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
 	if err != nil {
 		return fmt.Errorf("failed to open temp file %s: %w", tmpPath, err)
+	}
+
+	// Set restrictive permissions BEFORE writing any potentially sensitive content
+	if err := client.Chmod(tmpPath, perm); err != nil {
+		_ = tmpFile.Close()
+		_ = client.Remove(tmpPath)
+		return fmt.Errorf("failed to set permissions on temp file %s: %w", tmpPath, err)
 	}
 
 	if _, err := tmpFile.Write(content); err != nil {
@@ -55,13 +62,10 @@ func AtomicWriteFile(client *sftp.Client, targetPath string, content []byte, per
 		return fmt.Errorf("failed to close temp file %s: %w", tmpPath, err)
 	}
 
-	if err := client.Chmod(tmpPath, perm); err != nil {
-		// Non-fatal, continue
-	}
-
 	// In SFTP, Remove target before Rename if OS doesn't support atomic overwrite
 	_ = client.Remove(targetPath)
 	if err := client.Rename(tmpPath, targetPath); err != nil {
+		_ = client.Remove(tmpPath)
 		return fmt.Errorf("failed to rename %s to %s: %w", tmpPath, targetPath, err)
 	}
 

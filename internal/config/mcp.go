@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 )
 
 // MCPSettings holds configuration and credentials for the Model Context Protocol server
@@ -22,7 +21,7 @@ type MCPSettings struct {
 func GenerateMCPToken(tokenType string) string {
 	b := make([]byte, 24)
 	if _, err := rand.Read(b); err != nil {
-		return fmt.Sprintf("e42_mcp_%s_%d", tokenType, time.Now().UnixNano())
+		panic(fmt.Sprintf("crypto/rand failed: %v", err))
 	}
 	prefix := "ro"
 	lower := strings.ToLower(tokenType)
@@ -36,7 +35,7 @@ func GenerateMCPToken(tokenType string) string {
 func GenerateOAuthSecret() string {
 	b := make([]byte, 28)
 	if _, err := rand.Read(b); err != nil {
-		return fmt.Sprintf("e42_sec_%d", time.Now().UnixNano())
+		panic(fmt.Sprintf("crypto/rand failed: %v", err))
 	}
 	return fmt.Sprintf("e42_sec_%s", hex.EncodeToString(b))
 }

@@ -189,7 +189,17 @@ func (s *OAuthServer) ExchangeAuthCode(clientID, clientSecret, code, codeVerifie
 		return nil, errors.New("redirect_uri mismatch")
 	}
 
-	// Require either PKCE verification or confidential client authentication
+	// Determine whether this code belongs to a dynamically registered client or the confidential static client
+	_, isDynClient := s.dynClients[authCode.ClientID]
+
+	// Confidential static client MUST always authenticate with client_secret even when PKCE is used.
+	if !isDynClient {
+		if clientSecret == "" || !s.validateClientCredentialsLocked(clientID, clientSecret, false) {
+			return nil, errors.New("invalid client_id or client_secret")
+		}
+	}
+
+	// Verify PKCE if a code_challenge was supplied, or require client_secret for dynamic clients without PKCE
 	if authCode.CodeChallenge != "" {
 		if codeVerifier == "" {
 			return nil, errors.New("code_verifier required for PKCE")
@@ -197,15 +207,13 @@ func (s *OAuthServer) ExchangeAuthCode(clientID, clientSecret, code, codeVerifie
 		if !verifyPKCE(authCode.CodeChallenge, authCode.CodeChallengeMethod, codeVerifier) {
 			return nil, errors.New("invalid code_verifier PKCE verification failed")
 		}
-		if clientSecret != "" && !s.validateClientCredentialsLocked(clientID, clientSecret, true) {
+		if isDynClient && clientSecret != "" && !s.validateClientCredentialsLocked(clientID, clientSecret, true) {
 			return nil, errors.New("invalid client_id or client_secret")
 		}
-	} else if clientSecret != "" {
-		if !s.validateClientCredentialsLocked(clientID, clientSecret, true) {
-			return nil, errors.New("invalid client_id or client_secret")
+	} else if isDynClient {
+		if clientSecret == "" || !s.validateClientCredentialsLocked(clientID, clientSecret, true) {
+			return nil, errors.New("PKCE code_challenge or client_secret authentication is required")
 		}
-	} else {
-		return nil, errors.New("PKCE code_challenge or client_secret authentication is required")
 	}
 
 	return s.issueTokensLocked(authCode.Role, clientID, 86400*30) // 30-day token
@@ -250,11 +258,19 @@ func (s *OAuthServer) RefreshToken(refreshToken, clientID, clientSecret string) 
 		return nil, errors.New("invalid_grant: refresh token expired or revoked")
 	}
 
-	if refInfo.ClientID != "" && clientID != "" && refInfo.ClientID != clientID {
-		return nil, errors.New("invalid_client: client_id mismatch")
-	}
-
-	if clientSecret != "" && !s.validateClientCredentialsLocked(clientID, clientSecret, true) {
+	if refInfo.ClientID != "" {
+		if clientID == "" || refInfo.ClientID != clientID {
+			return nil, errors.New("invalid_client: client_id mismatch")
+		}
+		_, isDynClient := s.dynClients[refInfo.ClientID]
+		if !isDynClient {
+			if clientSecret == "" || !s.validateClientCredentialsLocked(clientID, clientSecret, false) {
+				return nil, errors.New("invalid_client: client authentication failed")
+			}
+		} else if clientSecret != "" && !s.validateClientCredentialsLocked(clientID, clientSecret, true) {
+			return nil, errors.New("invalid_client: client authentication failed")
+		}
+	} else if clientSecret != "" && !s.validateClientCredentialsLocked(clientID, clientSecret, true) {
 		return nil, errors.New("invalid_client: client authentication failed")
 	}
 
@@ -377,6 +393,17 @@ func (s *OAuthServer) issueTokensLocked(role, clientID string, durationSec int) 
 	refreshToken := fmt.Sprintf("e42_rt_%s", hex.EncodeToString(rtBytes))
 
 	now := time.Now()
+	// Prune expired tokens to prevent unbounded memory growth
+	for k, v := range s.accessTokens {
+		if now.After(v.ExpiresAt) {
+			delete(s.accessTokens, k)
+		}
+	}
+	for k, v := range s.refreshTokens {
+		if now.After(v.ExpiresAt) {
+			delete(s.refreshTokens, k)
+		}
+	}
 	expiresAt := now.Add(time.Duration(durationSec) * time.Second)
 	fp := s.currentSecretFingerprint()
 

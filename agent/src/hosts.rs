@@ -39,7 +39,7 @@ pub fn build_hosts_block(mut records: Vec<HostRecord>) -> String {
         let name = r.name.trim();
         if !ip.is_empty()
             && !name.is_empty()
-            && crate::validation::is_valid_ip(ip)
+            && crate::validation::is_valid_plain_ip(ip)
             && (crate::validation::is_valid_node_name(name) || crate::validation::is_valid_domain(name))
         {
             let mut parts = vec![name.to_string()];

@@ -278,6 +278,11 @@ func (s *StateStore) initDBLocked() error {
 		return fmt.Errorf("failed to initialize sqlite schema: %w", err)
 	}
 
+	// Restrict SQLite database files to owner-only permissions
+	_ = os.Chmod(s.filePath, 0600)
+	_ = os.Chmod(s.filePath+"-wal", 0600)
+	_ = os.Chmod(s.filePath+"-shm", 0600)
+
 	s.db = db
 
 	// Check if legacy state.json exists and migrate it

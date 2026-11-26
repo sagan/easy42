@@ -536,6 +536,44 @@ func (h *Hub) RemoveAppEnabled(nodeName, appName string) {
 	h.deletePersistedLocked(nodeName, cacheKeyAppEnabledPrefix+appName)
 }
 
+func isSecretAppFilePath(filePath string) bool {
+	lower := strings.ToLower(filePath)
+	base := lower
+	if idx := strings.LastIndex(lower, "/"); idx >= 0 {
+		base = lower[idx+1:]
+	}
+	return base == ".env" || strings.HasSuffix(base, ".env") || strings.HasPrefix(lower, "/etc/conf.d/ezapp-")
+}
+
+func redactAppFileForPersistence(filePath string, file ProbeConfigFile) ProbeConfigFile {
+	if isSecretAppFilePath(filePath) {
+		file.Content = ""
+	}
+	return file
+}
+
+func redactProbeConfigForPersistence(file ProbeConfigFile) ProbeConfigFile {
+	if file.Content == "" {
+		return file
+	}
+	lines := strings.Split(file.Content, "\n")
+	changed := false
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		lower := strings.ToLower(trimmed)
+		if strings.HasPrefix(lower, "privatekey") || strings.HasPrefix(lower, "presharedkey") {
+			if eq := strings.IndexByte(line, '='); eq >= 0 {
+				lines[i] = line[:eq+1] + " [REDACTED]"
+				changed = true
+			}
+		}
+	}
+	if changed {
+		file.Content = strings.Join(lines, "\n")
+	}
+	return file
+}
+
 // SetAppFiles updates the cached deployed app files for a node
 func (h *Hub) SetAppFiles(nodeName string, files map[string]ProbeConfigFile) {
 	h.mu.Lock()
@@ -547,7 +585,7 @@ func (h *Hub) SetAppFiles(nodeName string, files map[string]ProbeConfigFile) {
 	persist := make(map[string]string, len(files))
 	for k, v := range files {
 		cp[k] = v
-		if data, err := json.Marshal(v); err == nil {
+		if data, err := json.Marshal(redactAppFileForPersistence(k, v)); err == nil {
 			persist[cacheKeyAppFilePrefix+k] = string(data)
 		}
 	}
@@ -569,7 +607,7 @@ func (h *Hub) SetAppFile(nodeName string, filePath string, file ProbeConfigFile)
 		h.appFiles[nodeName] = make(map[string]ProbeConfigFile)
 	}
 	h.appFiles[nodeName][filePath] = file
-	if data, err := json.Marshal(file); err == nil {
+	if data, err := json.Marshal(redactAppFileForPersistence(filePath, file)); err == nil {
 		h.persistLocked(nodeName, cacheKeyAppFilePrefix+filePath, string(data))
 	}
 }
@@ -640,7 +678,7 @@ func (h *Hub) SetProbeConfigs(nodeName string, configs map[string]ProbeConfigFil
 	persist := make(map[string]string, len(configs))
 	for k, v := range configs {
 		cp[k] = v
-		if data, err := json.Marshal(v); err == nil {
+		if data, err := json.Marshal(redactProbeConfigForPersistence(v)); err == nil {
 			persist[cacheKeyProbeConfigPrefix+k] = string(data)
 		}
 	}
@@ -1077,7 +1115,7 @@ func (h *Hub) NodeStatus(nodeName string) *config.NodeStatus {
 func GenerateToken() string {
 	b := make([]byte, 24)
 	if _, err := rand.Read(b); err != nil {
-		return fmt.Sprintf("e42_%d", time.Now().UnixNano())
+		panic(fmt.Sprintf("crypto/rand failed: %v", err))
 	}
 	return "e42_" + hex.EncodeToString(b)
 }

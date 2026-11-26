@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestROAManager_LocalFile(t *testing.T) {
+func TestROAManager_RejectsLocalAndHTTP(t *testing.T) {
 	tmpDir := t.TempDir()
 	mgr := NewManager(tmpDir)
 
@@ -20,12 +20,14 @@ func TestROAManager_LocalFile(t *testing.T) {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
-	content, err := mgr.GetROAContent(context.Background(), testFilePath, false)
-	if err != nil {
-		t.Fatalf("GetROAContent failed: %v", err)
+	if _, err := mgr.GetROAContent(context.Background(), testFilePath, false); err == nil {
+		t.Fatalf("Expected local file ROA path to be rejected")
 	}
-	if content != sampleContent {
-		t.Errorf("Expected content %q, got %q", sampleContent, content)
+	if _, err := mgr.GetROAContent(context.Background(), "http://example.com/roa.conf", false); err == nil {
+		t.Fatalf("Expected plaintext http:// ROA URL to be rejected")
+	}
+	if _, err := mgr.GetROAContent(context.Background(), "https://127.0.0.1/roa.conf", false); err == nil {
+		t.Fatalf("Expected loopback https:// ROA URL to be blocked by SSRF filter")
 	}
 }
 
@@ -36,12 +38,13 @@ func TestROAManager_URLFetchAndCache(t *testing.T) {
 	fetchCount := 0
 	sampleContent := "roa fd00::/8 max 64 as 4242420001;\n"
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fetchCount++
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(sampleContent))
 	}))
 	defer ts.Close()
+	mgr.SetHTTPClient(ts.Client())
 
 	// First fetch should hit HTTP server
 	content, err := mgr.GetROAContent(context.Background(), ts.URL, false)
@@ -89,7 +92,7 @@ func TestROAManager_CacheFallbackOnError(t *testing.T) {
 	statusCode := http.StatusOK
 	sampleContent := "roa 172.20.100.0/24 max 24 as 4242421234;\n"
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if statusCode != http.StatusOK {
 			w.WriteHeader(statusCode)
 			return
@@ -98,6 +101,7 @@ func TestROAManager_CacheFallbackOnError(t *testing.T) {
 		w.Write([]byte(sampleContent))
 	}))
 	defer ts.Close()
+	mgr.SetHTTPClient(ts.Client())
 
 	// Initial successful fetch
 	_, err := mgr.GetROAContent(context.Background(), ts.URL, false)

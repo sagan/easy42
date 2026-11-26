@@ -3,6 +3,7 @@ package crypto
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
 	"strconv"
@@ -45,6 +46,10 @@ func CreateSessionToken(sessionSecret, passwordHash string, duration time.Durati
 
 // VerifySessionToken verifies the HMAC signature and expiration of a session token
 func VerifySessionToken(token, sessionSecret, passwordHash string) bool {
+	if sessionSecret == "" {
+		return false
+	}
+
 	parts := strings.Split(token, ".")
 	if len(parts) != 2 {
 		return false
@@ -53,6 +58,14 @@ func VerifySessionToken(token, sessionSecret, passwordHash string) bool {
 	b64Payload, signature := parts[0], parts[1]
 	payloadBytes, err := base64.RawURLEncoding.DecodeString(b64Payload)
 	if err != nil {
+		return false
+	}
+
+	// Verify HMAC signature before parsing untrusted payload fields
+	mac := hmac.New(sha256.New, []byte(sessionSecret))
+	mac.Write(payloadBytes)
+	expectedSig := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	if !hmac.Equal([]byte(signature), []byte(expectedSig)) {
 		return false
 	}
 
@@ -72,14 +85,5 @@ func VerifySessionToken(token, sessionSecret, passwordHash string) bool {
 	}
 
 	expectedPrefix := hashFingerprint(passwordHash)
-
-	if payloadParts[1] != expectedPrefix {
-		return false // Password changed
-	}
-
-	mac := hmac.New(sha256.New, []byte(sessionSecret))
-	mac.Write([]byte(payload))
-	expectedSig := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
-
-	return hmac.Equal([]byte(signature), []byte(expectedSig))
+	return subtle.ConstantTimeCompare([]byte(payloadParts[1]), []byte(expectedPrefix)) == 1
 }

@@ -237,8 +237,12 @@ func ValidateAdHocCommand(cmd string) error {
 		return fmt.Errorf("command cannot be empty")
 	}
 
-	// Must not contain shell metacharacters, quotes, or backslashes
-	if dangerousCharsRegex.MatchString(cmd) || strings.ContainsAny(cmd, `'"`+"\\") {
+	// Must not contain shell metacharacters, quotes, backslashes, globs, braces, or tildes
+	// Note: '?' is permitted in 'http ' probe URLs (query strings) which are parsed natively, not passed to a shell.
+	if dangerousCharsRegex.MatchString(cmd) || strings.ContainsAny(cmd, `'"`+"\\*{}~") {
+		return fmt.Errorf("command contains dangerous shell metacharacters")
+	}
+	if !strings.HasPrefix(cmd, "http ") && strings.ContainsRune(cmd, '?') {
 		return fmt.Errorf("command contains dangerous shell metacharacters")
 	}
 
@@ -270,15 +274,74 @@ func ValidateAdHocCommand(cmd string) error {
 			}
 		}
 	case "ping":
-		// Disallow flood ping (-f) and cap packet counts
-		for i, arg := range fields[1:] {
-			if arg == "-f" || strings.HasPrefix(arg, "-f") {
-				return fmt.Errorf("flood ping flag is not allowed")
-			}
-			if arg == "-c" && i+1 < len(fields[1:]) {
-				if count, err := strconv.Atoi(fields[1:][i+1]); err == nil && count > 30 {
-					return fmt.Errorf("ping count exceeds maximum allowed limit of 30")
+		// Disallow flood ping (-f in any short-flag cluster), sub-second interval (-i), and cap packet counts
+		args := fields[1:]
+		for i := 0; i < len(args); i++ {
+			arg := args[i]
+			if strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") {
+				flags := arg[1:]
+				if strings.ContainsRune(flags, 'f') {
+					return fmt.Errorf("flood ping flag is not allowed")
 				}
+				if strings.HasPrefix(flags, "i") {
+					return fmt.Errorf("ping interval flag (-i) is not allowed")
+				}
+				if flags == "c" {
+					if i+1 >= len(args) {
+						return fmt.Errorf("ping -c requires a count")
+					}
+					count, err := strconv.Atoi(args[i+1])
+					if err != nil || count < 1 || count > 30 {
+						return fmt.Errorf("ping count must be between 1 and 30")
+					}
+					i++
+				} else if strings.HasPrefix(flags, "c") {
+					count, err := strconv.Atoi(flags[1:])
+					if err != nil || count < 1 || count > 30 {
+						return fmt.Errorf("ping count must be between 1 and 30")
+					}
+				}
+			}
+		}
+	case "mtr":
+		args := fields[1:]
+		for i := 0; i < len(args); i++ {
+			arg := args[i]
+			if strings.HasPrefix(arg, "-i") || arg == "--interval" {
+				return fmt.Errorf("mtr interval flag is not allowed")
+			}
+			if arg == "-c" || arg == "--report-cycles" {
+				if i+1 >= len(args) {
+					return fmt.Errorf("mtr -c requires a cycle count")
+				}
+				count, err := strconv.Atoi(args[i+1])
+				if err != nil || count < 1 || count > 30 {
+					return fmt.Errorf("mtr cycle count must be between 1 and 30")
+				}
+				i++
+			} else if strings.HasPrefix(arg, "-c") {
+				count, err := strconv.Atoi(arg[2:])
+				if err != nil || count < 1 || count > 30 {
+					return fmt.Errorf("mtr cycle count must be between 1 and 30")
+				}
+			}
+		}
+	case "whois":
+		args := fields[1:]
+		for i := 0; i < len(args); i++ {
+			arg := args[i]
+			if arg == "-p" || strings.HasPrefix(arg, "-p") || arg == "--port" {
+				return fmt.Errorf("custom port flags are not allowed in whois")
+			}
+			if arg == "-h" || arg == "--host" {
+				if i+1 >= len(args) {
+					return fmt.Errorf("whois -h requires a host")
+				}
+				host := args[i+1]
+				if host == "localhost" || strings.HasPrefix(host, "127.") || host == "::1" || strings.HasPrefix(host, "169.254.") {
+					return fmt.Errorf("whois host '%s' is not allowed", host)
+				}
+				i++
 			}
 		}
 	case "ip":

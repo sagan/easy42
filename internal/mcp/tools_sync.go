@@ -2,12 +2,44 @@ package mcp
 
 import (
 	"context"
+	"strings"
 
 	"easy42/internal/config"
 	"easy42/internal/engine"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
+
+// redactSyncPreviewSecrets masks WireGuard PrivateKey and PresharedKey values
+// in preview output so read-only MCP clients cannot extract decrypted keys.
+func redactSyncPreviewSecrets(s string) string {
+	if s == "" {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	changed := false
+	for i, line := range lines {
+		// Handle optional unified diff prefix (+, -, space)
+		prefix := ""
+		body := line
+		if len(body) > 0 && (body[0] == '+' || body[0] == '-' || body[0] == ' ') {
+			prefix = body[:1]
+			body = body[1:]
+		}
+		trimmed := strings.TrimSpace(body)
+		lower := strings.ToLower(trimmed)
+		if strings.HasPrefix(lower, "privatekey") || strings.HasPrefix(lower, "presharedkey") {
+			if eq := strings.IndexByte(body, '='); eq >= 0 {
+				lines[i] = prefix + body[:eq+1] + " [REDACTED]"
+				changed = true
+			}
+		}
+	}
+	if !changed {
+		return s
+	}
+	return strings.Join(lines, "\n")
+}
 
 func registerSyncTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 1. preview_sync
@@ -25,12 +57,16 @@ func registerSyncTools(s *server.MCPServer, mgr *engine.Manager) {
 		nodes := req.GetStringSlice("nodes", nil)
 		scope := req.GetString("scope", "")
 
-		actions, err := mgr.PlanSyncWithScope(scope, nodes...)
+		actions, err := mgr.PlanSyncPreview(scope, nodes...)
 		if err != nil {
 			return errorResult(err)
 		}
 		if actions == nil {
 			actions = []config.SyncAction{}
+		}
+		for i := range actions {
+			actions[i].FileContent = redactSyncPreviewSecrets(actions[i].FileContent)
+			actions[i].Diff = redactSyncPreviewSecrets(actions[i].Diff)
 		}
 		return jsonResult(PreviewSyncOutput{Actions: actions})
 	})
