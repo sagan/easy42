@@ -5,6 +5,9 @@ edition = "2021"
 authors = ["Easy42 Team"]
 description = "Lightweight high-performance node agent for Easy42"
 
+[features]
+e2e-test = []
+
 [dependencies]
 tokio = { version = "1.43", features = ["rt-multi-thread", "macros", "time", "sync", "process", "io-util", "fs", "signal"] }
 tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }

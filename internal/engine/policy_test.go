@@ -19,10 +19,10 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 		t.Fatalf("Failed to unlock manager: %v", err)
 	}
 
-	// 1. Initial policies should include the 3 built-ins
+	// 1. Initial policies should include the 4 built-ins
 	policies := mgr.GetNetworkPolicies()
-	if len(policies) != 3 {
-		t.Fatalf("expected 3 initial builtin policies, got %d", len(policies))
+	if len(policies) != 4 {
+		t.Fatalf("expected 4 initial builtin policies, got %d", len(policies))
 	}
 
 	// 2. Reject creating policy with reserved ID
@@ -198,8 +198,8 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 
 	// Verify it is no longer listed
 	policies = mgr.GetNetworkPolicies()
-	if len(policies) != 3 {
-		t.Fatalf("expected 3 policies after deletion, got %d", len(policies))
+	if len(policies) != 4 {
+		t.Fatalf("expected 4 policies after deletion, got %d", len(policies))
 	}
 }
 

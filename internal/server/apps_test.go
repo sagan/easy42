@@ -1386,7 +1386,7 @@ func TestScriptAppDeploymentAndAction(t *testing.T) {
 	if scriptSpec.AppType != agentpb.AppType_SCRIPT {
 		t.Fatalf("expected AppType_SCRIPT, got %v", scriptSpec.AppType)
 	}
-	if !strings.Contains(scriptSpec.MainContent, "export VAR=daily_backup") {
+	if !strings.Contains(scriptSpec.MainContent, "export VAR='daily_backup'") {
 		t.Fatalf("expected injected env in MainContent, got:\n%s", scriptSpec.MainContent)
 	}
 

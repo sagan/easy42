@@ -21,6 +21,9 @@ import (
 )
 
 func setupTestServer(t *testing.T) (*Server, string, string) {
+	loginRateLimiter.reset()
+	oauthRateLimiter.reset()
+
 	tempDir, err := os.MkdirTemp("", "easy42-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -926,7 +929,7 @@ func TestNetworkPoliciesAPI(t *testing.T) {
 	srv.router.ServeHTTP(w, req)
 	cookie := w.Result().Cookies()[0]
 
-	// 1. GET /api/network-policies (initially 3 built-in policies)
+	// 1. GET /api/network-policies (initially 4 built-in policies)
 	reqGet := httptest.NewRequest("GET", "/api/network-policies", nil)
 	reqGet.AddCookie(cookie)
 	wGet := httptest.NewRecorder()
@@ -936,8 +939,8 @@ func TestNetworkPoliciesAPI(t *testing.T) {
 	}
 	var policies []config.NetworkPolicy
 	_ = json.Unmarshal(wGet.Body.Bytes(), &policies)
-	if len(policies) != 3 {
-		t.Fatalf("Expected 3 initial policies, got %d", len(policies))
+	if len(policies) != 4 {
+		t.Fatalf("Expected 4 initial policies, got %d", len(policies))
 	}
 
 	// 2. POST /api/network-policies with reserved ID -> 400
@@ -2552,9 +2555,10 @@ func TestLinkPskAndPrivateKeyEndpoints(t *testing.T) {
 }
 
 func TestVersionEndpoint(t *testing.T) {
-	srv, tempDir, _ := setupTestServer(t)
+	srv, tempDir, initPass := setupTestServer(t)
 	defer os.RemoveAll(tempDir)
 
+	// Unauthenticated request returns public version fields only
 	req := httptest.NewRequest("GET", "/api/version", nil)
 	w := httptest.NewRecorder()
 	srv.router.ServeHTTP(w, req)
@@ -2577,15 +2581,38 @@ func TestVersionEndpoint(t *testing.T) {
 	if resp["github_url"] != "https://github.com/sagan/easy42" {
 		t.Errorf("Expected github_url to match, got %v", resp["github_url"])
 	}
-	if resp["listen_address"] != "127.0.0.1:0" {
-		t.Errorf("Expected listen_address to be 127.0.0.1:0, got %v", resp["listen_address"])
+	if resp["listen_address"] != nil || resp["data_dir"] != nil || resp["config_file"] != nil {
+		t.Errorf("Expected sensitive paths to be omitted when unauthenticated, got %+v", resp)
 	}
-	if resp["data_dir"] != tempDir {
-		t.Errorf("Expected data_dir to match tempDir, got %v", resp["data_dir"])
+
+	// Authenticated request includes listen_address, data_dir, and config_file
+	loginBody, _ := json.Marshal(map[string]string{"password": initPass})
+	loginReq := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	loginW := httptest.NewRecorder()
+	srv.router.ServeHTTP(loginW, loginReq)
+	cookie := loginW.Result().Cookies()[0]
+
+	authReq := httptest.NewRequest("GET", "/api/version", nil)
+	authReq.AddCookie(cookie)
+	authW := httptest.NewRecorder()
+	srv.router.ServeHTTP(authW, authReq)
+	if authW.Code != http.StatusOK {
+		t.Fatalf("Expected 200 from authenticated /api/version, got %d: %s", authW.Code, authW.Body.String())
+	}
+
+	var authResp map[string]any
+	if err := json.Unmarshal(authW.Body.Bytes(), &authResp); err != nil {
+		t.Fatalf("Failed to parse authenticated /api/version response: %v", err)
+	}
+	if authResp["listen_address"] != "127.0.0.1:0" {
+		t.Errorf("Expected listen_address to be 127.0.0.1:0, got %v", authResp["listen_address"])
+	}
+	if authResp["data_dir"] != tempDir {
+		t.Errorf("Expected data_dir to match tempDir, got %v", authResp["data_dir"])
 	}
 	expectedConfigFile := filepath.Join(tempDir, "config.json")
-	if resp["config_file"] != expectedConfigFile {
-		t.Errorf("Expected config_file to be %v, got %v", expectedConfigFile, resp["config_file"])
+	if authResp["config_file"] != expectedConfigFile {
+		t.Errorf("Expected config_file to be %v, got %v", expectedConfigFile, authResp["config_file"])
 	}
 }
 

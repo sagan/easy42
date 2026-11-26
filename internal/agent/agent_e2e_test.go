@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,17 +21,51 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
+var (
+	e2eAgentBuildOnce sync.Once
+	e2eAgentBinPath   string
+	e2eAgentBuildErr  error
+)
+
+// resolveE2EAgentBinary builds an e2e-test-enabled agent binary when cargo is
+// available (allowing /tmp config paths in tests without weakening the release
+// binary), or falls back to prebuilt binaries.
+func resolveE2EAgentBinary(t *testing.T) string {
+	t.Helper()
+	if _, err := exec.LookPath("cargo"); err == nil {
+		e2eAgentBuildOnce.Do(func() {
+			manifest := filepath.Join("..", "..", "agent", "Cargo.toml")
+			cmd := exec.Command("cargo", "build", "--manifest-path", manifest, "--features", "e2e-test")
+			if out, err := cmd.CombinedOutput(); err != nil {
+				e2eAgentBuildErr = err
+				t.Logf("cargo build failed: %v\n%s", err, string(out))
+				return
+			}
+			e2eAgentBinPath = filepath.Join("..", "..", "agent", "target", "debug", "easy42-agent")
+		})
+		if e2eAgentBuildErr == nil {
+			if _, err := os.Stat(e2eAgentBinPath); err == nil {
+				return e2eAgentBinPath
+			}
+		}
+	}
+
+	candidates := []string{
+		filepath.Join("..", "..", "bin", "easy42-agent"),
+		filepath.Join("..", "..", "agent", "target", "x86_64-unknown-linux-musl", "release", "easy42-agent"),
+		filepath.Join("..", "..", "agent", "target", "debug", "easy42-agent"),
+	}
+	for _, candidate := range candidates {
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	t.Skipf("agent binary not found, skipping e2e test")
+	return ""
+}
+
 func TestRustAgentEndToEnd(t *testing.T) {
-	agentBin := filepath.Join("..", "..", "bin", "easy42-agent")
-	if _, err := os.Stat(agentBin); err != nil {
-		agentBin = filepath.Join("..", "..", "agent", "target", "x86_64-unknown-linux-musl", "release", "easy42-agent")
-	}
-	if _, err := os.Stat(agentBin); err != nil {
-		agentBin = filepath.Join("..", "..", "agent", "target", "debug", "easy42-agent")
-	}
-	if _, err := os.Stat(agentBin); err != nil {
-		t.Skipf("agent binary not found at %s, skipping e2e test", agentBin)
-	}
+	agentBin := resolveE2EAgentBinary(t)
 
 	hub := agent.NewHub()
 	testToken := "e42_e2e_test_token_12345"
@@ -184,7 +219,7 @@ func TestRustAgentEndToEnd(t *testing.T) {
 		Command: &agentpb.CommandRequest_LookingGlass{
 			LookingGlass: &agentpb.LookingGlassCmd{
 				Tool:           agentpb.LookingGlassCmd_CUSTOM,
-				Command:        "ip route show",
+				Command:        "ip addr show lo",
 				TimeoutSeconds: 5,
 			},
 		},
@@ -196,7 +231,7 @@ func TestRustAgentEndToEnd(t *testing.T) {
 		t.Fatalf("expected LookingGlass to succeed, got: %+v", diagResp)
 	}
 	if strings.TrimSpace(diagResp.Stdout) == "" && strings.TrimSpace(diagResp.Stderr) == "" {
-		t.Fatalf("expected non-empty output from ip route show")
+		t.Fatalf("expected non-empty output from ip addr show lo")
 	}
 
 	// Test hosts file management via SyncHostsCmd
@@ -264,16 +299,7 @@ func TestRustAgentEndToEnd(t *testing.T) {
 }
 
 func TestRustAgentSyncActionAndHooks(t *testing.T) {
-	agentBin := filepath.Join("..", "..", "bin", "easy42-agent")
-	if _, err := os.Stat(agentBin); err != nil {
-		agentBin = filepath.Join("..", "..", "agent", "target", "x86_64-unknown-linux-musl", "release", "easy42-agent")
-	}
-	if _, err := os.Stat(agentBin); err != nil {
-		agentBin = filepath.Join("..", "..", "agent", "target", "debug", "easy42-agent")
-	}
-	if _, err := os.Stat(agentBin); err != nil {
-		t.Skipf("agent binary not found at %s, skipping e2e test", agentBin)
-	}
+	agentBin := resolveE2EAgentBinary(t)
 
 	hub := agent.NewHub()
 	testToken := "e42_hooks_token_99999"
@@ -316,10 +342,20 @@ func TestRustAgentSyncActionAndHooks(t *testing.T) {
 		t.Fatalf("failed to write agent config: %v", err)
 	}
 
+	// Stub birdc in PATH so sync_roa succeeds without a running BIRD daemon
+	stubBinDir := filepath.Join(tmpDir, "bin")
+	if err := os.MkdirAll(stubBinDir, 0755); err != nil {
+		t.Fatalf("failed to create stub bin dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(stubBinDir, "birdc"), []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatalf("failed to write stub birdc: %v", err)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, agentBin, "--config", configFile)
+	cmd.Env = append(os.Environ(), "PATH="+stubBinDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("failed to start agent: %v", err)
 	}
@@ -397,13 +433,7 @@ func TestRustAgentSyncActionAndHooks(t *testing.T) {
 }
 
 func TestRustAgentSyncActionPreHookFailure(t *testing.T) {
-	agentBin := filepath.Join("..", "..", "bin", "easy42-agent")
-	if _, err := os.Stat(agentBin); err != nil {
-		agentBin = filepath.Join("..", "..", "agent", "target", "debug", "easy42-agent")
-	}
-	if _, err := os.Stat(agentBin); err != nil {
-		t.Skipf("agent binary not found at %s, skipping e2e test", agentBin)
-	}
+	agentBin := resolveE2EAgentBinary(t)
 
 	hub := agent.NewHub()
 	testToken := "e42_hooks_fail_token_111"
@@ -438,10 +468,20 @@ func TestRustAgentSyncActionPreHookFailure(t *testing.T) {
 		t.Fatalf("failed to write agent config: %v", err)
 	}
 
+	// Stub birdc in PATH so sync_roa succeeds without a running BIRD daemon
+	stubBinDir := filepath.Join(tmpDir, "bin")
+	if err := os.MkdirAll(stubBinDir, 0755); err != nil {
+		t.Fatalf("failed to create stub bin dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(stubBinDir, "birdc"), []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatalf("failed to write stub birdc: %v", err)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, agentBin, "--config", configFile)
+	cmd.Env = append(os.Environ(), "PATH="+stubBinDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("failed to start agent: %v", err)
 	}
@@ -499,13 +539,7 @@ func TestRustAgentSyncActionPreHookFailure(t *testing.T) {
 }
 
 func TestRustAgentSyncActionDeleteConfig(t *testing.T) {
-	agentBin := filepath.Join("..", "..", "bin", "easy42-agent")
-	if _, err := os.Stat(agentBin); err != nil {
-		agentBin = filepath.Join("..", "..", "agent", "target", "debug", "easy42-agent")
-	}
-	if _, err := os.Stat(agentBin); err != nil {
-		t.Skipf("agent binary not found at %s, skipping e2e test", agentBin)
-	}
+	agentBin := resolveE2EAgentBinary(t)
 
 	hub := agent.NewHub()
 	testToken := "e42_del_token_222"
@@ -550,10 +584,20 @@ func TestRustAgentSyncActionDeleteConfig(t *testing.T) {
 		t.Fatalf("failed to write agent config: %v", err)
 	}
 
+	// Stub birdc in PATH so sync_roa succeeds without a running BIRD daemon
+	stubBinDir := filepath.Join(tmpDir, "bin")
+	if err := os.MkdirAll(stubBinDir, 0755); err != nil {
+		t.Fatalf("failed to create stub bin dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(stubBinDir, "birdc"), []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatalf("failed to write stub birdc: %v", err)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, agentBin, "--config", configFile)
+	cmd.Env = append(os.Environ(), "PATH="+stubBinDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("failed to start agent: %v", err)
 	}

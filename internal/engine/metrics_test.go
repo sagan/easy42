@@ -26,7 +26,7 @@ func TestFleetWeightedMetricsAndTotals(t *testing.T) {
 	cfg.Nodes = []config.Node{
 		{Name: "node-a", Mode: "agent"},
 		{Name: "node-b", Mode: "agent"},
-		{Name: "node-ext", Mode: "unmanaged"},
+		{Name: "node-ext", IsExternal: true},
 	}
 	if err := store.Save(cfg); err != nil {
 		t.Fatalf("failed to save config: %v", err)

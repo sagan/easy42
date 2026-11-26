@@ -29,22 +29,22 @@ func TestBuildConfigureIPPayload(t *testing.T) {
 	}
 
 	envStr := string(envBytes)
-	if !strings.Contains(envStr, `NODE_NAME="test-node"`) {
+	if !strings.Contains(envStr, `NODE_NAME='test-node'`) {
 		t.Errorf("expected NODE_NAME in env, got: %s", envStr)
 	}
-	if !strings.Contains(envStr, `NODE_INTERFACE="dummy0"`) {
+	if !strings.Contains(envStr, `NODE_INTERFACE='dummy0'`) {
 		t.Errorf("expected NODE_INTERFACE in env, got: %s", envStr)
 	}
-	if !strings.Contains(envStr, `NODE_IP="192.168.142.200"`) {
+	if !strings.Contains(envStr, `NODE_IP='192.168.142.200'`) {
 		t.Errorf("expected NODE_IP cleaned without /32 in env, got: %s", envStr)
 	}
-	if !strings.Contains(envStr, `NODE_IP6="fd42:a159:f9f0:8000::c8"`) {
+	if !strings.Contains(envStr, `NODE_IP6='fd42:a159:f9f0:8000::c8'`) {
 		t.Errorf("expected NODE_IP6 cleaned without /128 in env, got: %s", envStr)
 	}
-	if !strings.Contains(envStr, `NODE_EXTERNAL_IP="172.20.229.1"`) {
+	if !strings.Contains(envStr, `NODE_EXTERNAL_IP='172.20.229.1'`) {
 		t.Errorf("expected NODE_EXTERNAL_IP in env, got: %s", envStr)
 	}
-	if !strings.Contains(envStr, `NODE_EXTERNAL_IP6="fd42:a159:f9f0::1"`) {
+	if !strings.Contains(envStr, `NODE_EXTERNAL_IP6='fd42:a159:f9f0::1'`) {
 		t.Errorf("expected NODE_EXTERNAL_IP6 in env, got: %s", envStr)
 	}
 
@@ -52,8 +52,8 @@ func TestBuildConfigureIPPayload(t *testing.T) {
 		t.Errorf("expected HAS_CUSTOM_SCRIPT=\"0\" in env, got: %s", envStr)
 	}
 
-	if !strings.Contains(envStr, `NODE_TAGS="lan-1,prod,vps"`) {
-		t.Errorf("expected NODE_TAGS=\"lan-1,prod,vps\" in env, got: %s", envStr)
+	if !strings.Contains(envStr, `NODE_TAGS='lan-1,prod,vps'`) {
+		t.Errorf("expected NODE_TAGS='lan-1,prod,vps' in env, got: %s", envStr)
 	}
 	if !strings.Contains(envStr, `NODE_TAG_VPS="1"`) {
 		t.Errorf("expected NODE_TAG_VPS=\"1\" in env, got: %s", envStr)
@@ -70,7 +70,7 @@ func TestBuildConfigureIPPayload(t *testing.T) {
 	if !ok || len(statusBytes) == 0 {
 		t.Fatalf("expected status.sh in payload")
 	}
-	if !strings.Contains(string(statusBytes), `NODE_INTERFACE="dummy0"`) {
+	if !strings.Contains(string(statusBytes), `NODE_INTERFACE='dummy0'`) {
 		t.Errorf("expected dynamic status.sh to have NODE_INTERFACE embedded")
 	}
 
@@ -78,7 +78,7 @@ func TestBuildConfigureIPPayload(t *testing.T) {
 	if !ok || len(runBytes) == 0 {
 		t.Fatalf("expected run.sh in payload")
 	}
-	if !strings.Contains(string(runBytes), `NODE_INTERFACE="dummy0"`) {
+	if !strings.Contains(string(runBytes), `NODE_INTERFACE='dummy0'`) {
 		t.Errorf("expected dynamic run.sh to have NODE_INTERFACE embedded")
 	}
 }
@@ -173,7 +173,7 @@ func TestBuildNodeEnv_NodeData(t *testing.T) {
 	}
 
 	// String with spaces should be quoted safely
-	if !strings.Contains(envStr, `NODE_DATA_DESCRIPTION="Main gateway server"`) {
+	if !strings.Contains(envStr, `NODE_DATA_DESCRIPTION='Main gateway server'`) {
 		t.Errorf("expected quoted NODE_DATA_DESCRIPTION in env, got:\n%s", envStr)
 	}
 

@@ -66,8 +66,8 @@ fn is_allowed_config_path(path: &Path) -> bool {
         }
     }
 
-    // 4. Temporary test directory (only enabled for unit tests)
-    #[cfg(test)]
+    // 4. Temporary test directory (only enabled for unit tests or e2e-test builds)
+    #[cfg(any(test, feature = "e2e-test"))]
     if p_str.starts_with("/tmp/") {
         return true;
     }

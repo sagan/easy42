@@ -82,6 +82,12 @@ func (l *ipRateLimiter) allow(key string) bool {
 	return true
 }
 
+func (l *ipRateLimiter) reset() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.buckets = make(map[string]*rateLimitBucket)
+}
+
 var (
 	loginRateLimiter = newIPRateLimiter(10, 5*time.Minute)
 	oauthRateLimiter = newIPRateLimiter(30, time.Minute)

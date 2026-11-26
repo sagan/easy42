@@ -10,6 +10,28 @@ import (
 	"easy42/internal/config"
 )
 
+func validateNftSyntax(t *testing.T, conf string) {
+	t.Helper()
+	nftPath, err := exec.LookPath("nft")
+	if err != nil {
+		return
+	}
+	tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
+	if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+	cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		outStr := string(out)
+		if strings.Contains(outStr, "Operation not permitted") || strings.Contains(outStr, "cache initialization failed") {
+			t.Logf("skipping nft -c -f validation without netlink permissions: %s", strings.TrimSpace(outStr))
+			return
+		}
+		t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, outStr, conf)
+	}
+}
+
 func TestFormatNftPrefixList(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -145,18 +167,7 @@ func TestGenerateNftablesConfig(t *testing.T) {
 		t.Errorf("Hardcoded @external_ifname should not be present in conf, got:\n%s", conf)
 	}
 
-	// Validate syntax with nft binary if installed
-	if nftPath, err := exec.LookPath("nft"); err == nil {
-		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
-		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
-			t.Fatalf("WriteFile failed: %v", err)
-		}
-		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
-		}
-	}
+	validateNftSyntax(t, conf)
 }
 
 func TestGenerateNftablesConfigWithoutExternalIP(t *testing.T) {
@@ -181,18 +192,7 @@ func TestGenerateNftablesConfigWithoutExternalIP(t *testing.T) {
 		t.Errorf("Did not expect snat rule for external_ip when none configured")
 	}
 
-	// Validate syntax with nft binary if installed
-	if nftPath, err := exec.LookPath("nft"); err == nil {
-		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
-		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
-			t.Fatalf("WriteFile failed: %v", err)
-		}
-		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
-		}
-	}
+	validateNftSyntax(t, conf)
 }
 
 func TestNetworkPolicyNftables(t *testing.T) {
@@ -277,17 +277,7 @@ func TestNetworkPolicyNftables(t *testing.T) {
 	}
 
 	// 6. Validate with real nft binary
-	if nftPath, err := exec.LookPath("nft"); err == nil {
-		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
-		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
-			t.Fatalf("WriteFile failed: %v", err)
-		}
-		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
-		}
-	}
+	validateNftSyntax(t, conf)
 }
 
 func TestInputFilterProtocolsAndPorts(t *testing.T) {
@@ -346,18 +336,7 @@ func TestInputFilterProtocolsAndPorts(t *testing.T) {
 		t.Errorf("Expected counter drop, got:\n%s", conf)
 	}
 
-	// Validate syntax with nft binary if installed
-	if nftPath, err := exec.LookPath("nft"); err == nil {
-		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
-		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
-			t.Fatalf("WriteFile failed: %v", err)
-		}
-		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
-		}
-	}
+	validateNftSyntax(t, conf)
 }
 
 func TestInputFilterAllProtocols(t *testing.T) {
@@ -403,18 +382,7 @@ func TestInputFilterAllProtocols(t *testing.T) {
 		t.Errorf("Expected meta l4proto { icmp, ipv6-icmp } accept, got:\n%s", conf)
 	}
 
-	// Validate syntax with nft binary if installed
-	if nftPath, err := exec.LookPath("nft"); err == nil {
-		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
-		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
-			t.Fatalf("WriteFile failed: %v", err)
-		}
-		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
-		}
-	}
+	validateNftSyntax(t, conf)
 }
 
 func TestGenerateNftablesConfigWithIP6(t *testing.T) {
@@ -437,17 +405,7 @@ func TestGenerateNftablesConfigWithIP6(t *testing.T) {
 		t.Errorf("Expected ipv6 snat rule to self_ip6, got:\n%s", conf)
 	}
 
-	if nftPath, err := exec.LookPath("nft"); err == nil {
-		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
-		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
-			t.Fatalf("WriteFile failed: %v", err)
-		}
-		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
-		}
-	}
+	validateNftSyntax(t, conf)
 }
 
 func TestLocalNetworksForwardFilter(t *testing.T) {
@@ -533,17 +491,7 @@ func TestLocalNetworksForwardFilter(t *testing.T) {
 	}
 
 	// Verify nft -c -f validation passes
-	if nftPath, err := exec.LookPath("nft"); err == nil {
-		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
-		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
-			t.Fatalf("WriteFile failed: %v", err)
-		}
-		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
-		}
-	}
+	validateNftSyntax(t, conf)
 }
 
 func TestDSCPNftables(t *testing.T) {
@@ -617,18 +565,7 @@ func TestDSCPNftables(t *testing.T) {
 		t.Errorf("Did not expect DSCP rules for no-dscp policy, got:\n%s", conf)
 	}
 
-	// Validate syntax with nft binary if installed
-	if nftPath, err := exec.LookPath("nft"); err == nil {
-		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
-		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
-			t.Fatalf("WriteFile failed: %v", err)
-		}
-		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
-		}
-	}
+	validateNftSyntax(t, conf)
 }
 
 func TestDSCPIngressOnly(t *testing.T) {
@@ -669,18 +606,7 @@ func TestDSCPIngressOnly(t *testing.T) {
 		t.Errorf("Did not expect mangle_postrouting_dscp chain, got:\n%s", conf)
 	}
 
-	// Validate syntax with nft binary if installed
-	if nftPath, err := exec.LookPath("nft"); err == nil {
-		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
-		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
-			t.Fatalf("WriteFile failed: %v", err)
-		}
-		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
-		}
-	}
+	validateNftSyntax(t, conf)
 }
 
 func TestFormatNftDSCPAction(t *testing.T) {
@@ -839,18 +765,7 @@ func TestNftablesConfigHooks(t *testing.T) {
 		t.Errorf("Expected nft.post hook in:\n%s", conf)
 	}
 
-	// Validate syntax with nft binary if installed
-	if nftPath, err := exec.LookPath("nft"); err == nil {
-		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
-		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
-			t.Fatalf("WriteFile failed: %v", err)
-		}
-		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
-		}
-	}
+	validateNftSyntax(t, conf)
 }
 
 func TestNftablesConfigHooksRenderedAsTemplates(t *testing.T) {
@@ -882,18 +797,7 @@ func TestNftablesConfigHooksRenderedAsTemplates(t *testing.T) {
 		t.Errorf("Expected nft.post hook rendered with node data in:\n%s", conf)
 	}
 
-	// Validate syntax with nft binary if installed
-	if nftPath, err := exec.LookPath("nft"); err == nil {
-		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
-		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
-			t.Fatalf("WriteFile failed: %v", err)
-		}
-		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
-		}
-	}
+	validateNftSyntax(t, conf)
 }
 
 func TestDisallowedCIDRsNftables(t *testing.T) {
@@ -1017,17 +921,7 @@ func TestDisallowedCIDRsNftables(t *testing.T) {
 	}
 
 	// 5. Validate with real nft binary
-	if nftPath, err := exec.LookPath("nft"); err == nil {
-		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
-		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
-			t.Fatalf("WriteFile failed: %v", err)
-		}
-		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
-		}
-	}
+	validateNftSyntax(t, conf)
 }
 
 func TestGenerateNftablesConfig_NetfilterMark(t *testing.T) {
@@ -1115,17 +1009,7 @@ func TestGenerateNftablesConfig_NetfilterMark(t *testing.T) {
 	}
 
 	// 6. Validate with real nft binary
-	if nftPath, err := exec.LookPath("nft"); err == nil {
-		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
-		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
-			t.Fatalf("WriteFile failed: %v", err)
-		}
-		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
-		}
-	}
+	validateNftSyntax(t, conf)
 }
 
 func TestGenerateNftablesConfig_ClientNodeNetfilterMark(t *testing.T) {
@@ -1363,17 +1247,7 @@ func TestGenerateNftablesConfig_NetfilterMarkBitmask(t *testing.T) {
 	}
 
 	// 6. Validate with real nft binary
-	if nftPath, err := exec.LookPath("nft"); err == nil {
-		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
-		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
-			t.Fatalf("WriteFile failed: %v", err)
-		}
-		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
-		}
-	}
+	validateNftSyntax(t, conf)
 }
 
 func TestNftablesSNAT_MainIP(t *testing.T) {
@@ -1431,17 +1305,7 @@ func TestNftablesSNAT_MainIP(t *testing.T) {
 	}
 
 	// Validate with nft binary
-	if nftPath, err := exec.LookPath("nft"); err == nil {
-		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
-		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
-			t.Fatalf("WriteFile failed: %v", err)
-		}
-		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
-		}
-	}
+	validateNftSyntax(t, conf)
 }
 
 func TestNftablesForwardSNAT(t *testing.T) {
@@ -1522,17 +1386,7 @@ func TestNftablesForwardSNAT(t *testing.T) {
 	}
 
 	// Validate with nft binary
-	if nftPath, err := exec.LookPath("nft"); err == nil {
-		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
-		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
-			t.Fatalf("WriteFile failed: %v", err)
-		}
-		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
-		}
-	}
+	validateNftSyntax(t, conf)
 }
 
 func TestNftablesPostroutingOrder_OutboundBeforeForward(t *testing.T) {
@@ -1636,17 +1490,7 @@ func TestNftablesPostroutingOrder_OutboundBeforeForward(t *testing.T) {
 	}
 
 	// Validate with nft binary
-	if nftPath, err := exec.LookPath("nft"); err == nil {
-		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
-		if err := os.WriteFile(tmpFile, []byte(confDual), 0644); err != nil {
-			t.Fatalf("WriteFile failed: %v", err)
-		}
-		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), confDual)
-		}
-	}
+	validateNftSyntax(t, confDual)
 }
 
 func TestBlockIngressNewNftables(t *testing.T) {
@@ -1719,17 +1563,7 @@ func TestBlockIngressNewNftables(t *testing.T) {
 	}
 
 	// Verify syntax using nft -c -f
-	if nftPath, err := exec.LookPath("nft"); err == nil {
-		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
-		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
-			t.Fatalf("WriteFile failed: %v", err)
-		}
-		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
-		}
-	}
+	validateNftSyntax(t, conf)
 
 	// Verify that when disabled, filter_prerouting chain is not generated
 	linksDisabled := []config.Link{
@@ -1788,18 +1622,7 @@ func TestGenerateNftablesConfig_ManualLink(t *testing.T) {
 		t.Errorf("Expected define easy42_ifname to contain eth1, got:\n%s", conf)
 	}
 
-	if nftPath, err := exec.LookPath("nft"); err == nil {
-		tmpDir := t.TempDir()
-		tmpFile := filepath.Join(tmpDir, "easy42.nft")
-		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
-			t.Fatalf("WriteFile failed: %v", err)
-		}
-		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
-		}
-	}
+	validateNftSyntax(t, conf)
 }
 
 func TestBlockIngressNewWhitelistNftables(t *testing.T) {
@@ -1899,16 +1722,5 @@ func TestBlockIngressNewWhitelistNftables(t *testing.T) {
 	}
 
 	// nft -c -f validation
-	if nftPath, err := exec.LookPath("nft"); err == nil {
-		tmpDir := t.TempDir()
-		tmpFile := filepath.Join(tmpDir, "easy42.nft")
-		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
-			t.Fatalf("WriteFile failed: %v", err)
-		}
-		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
-		}
-	}
+	validateNftSyntax(t, conf)
 }

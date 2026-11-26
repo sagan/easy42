@@ -219,8 +219,24 @@ func TestMCPOAuthAuthorizationCodeFlow(t *testing.T) {
 	srv, cleanup, sessionToken := setupTestServerForMCP(t)
 	defer cleanup()
 
+	// Fetch OAuth static client credentials (confidential client requires client_secret)
+	cfgReq := httptest.NewRequest("GET", "/api/settings/mcp", nil)
+	cfgReq.Header.Set("Authorization", "Bearer "+sessionToken)
+	cfgRr := httptest.NewRecorder()
+	srv.router.ServeHTTP(cfgRr, cfgReq)
+	if cfgRr.Code != http.StatusOK {
+		t.Fatalf("expected 200 from GET /api/settings/mcp, got %d: %s", cfgRr.Code, cfgRr.Body.String())
+	}
+	var mcpCfg struct {
+		OAuthClientID     string `json:"oauth_client_id"`
+		OAuthClientSecret string `json:"oauth_client_secret"`
+	}
+	if err := json.NewDecoder(cfgRr.Body).Decode(&mcpCfg); err != nil {
+		t.Fatalf("failed to decode /api/settings/mcp: %v", err)
+	}
+
 	// 1. GET /oauth/authorize (consent page)
-	authReq := httptest.NewRequest("GET", "/oauth/authorize?response_type=code&client_id=easy42-mcp&redirect_uri=https://example.com/callback&state=xyz123&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256", nil)
+	authReq := httptest.NewRequest("GET", "/oauth/authorize?response_type=code&client_id="+url.QueryEscape(mcpCfg.OAuthClientID)+"&redirect_uri=https://example.com/callback&state=xyz123&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256", nil)
 	authReq.AddCookie(&http.Cookie{Name: "easy42_session", Value: sessionToken})
 	authRr := httptest.NewRecorder()
 	srv.router.ServeHTTP(authRr, authReq)
@@ -230,7 +246,7 @@ func TestMCPOAuthAuthorizationCodeFlow(t *testing.T) {
 	}
 
 	// 2. POST /oauth/authorize (approve)
-	form := "action=approve&response_type=code&client_id=easy42-mcp&redirect_uri=https://example.com/callback&state=xyz123&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256&role=full_control"
+	form := "action=approve&response_type=code&client_id=" + url.QueryEscape(mcpCfg.OAuthClientID) + "&redirect_uri=https://example.com/callback&state=xyz123&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256&role=full_control"
 	postReq := httptest.NewRequest("POST", "/oauth/authorize", strings.NewReader(form))
 	postReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	postReq.AddCookie(&http.Cookie{Name: "easy42_session", Value: sessionToken})
@@ -256,7 +272,7 @@ func TestMCPOAuthAuthorizationCodeFlow(t *testing.T) {
 
 	// 3. POST /oauth/token to exchange authorization code using PKCE
 	// RFC 7636: challenge "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", verifier "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
-	tokenForm := "grant_type=authorization_code&client_id=easy42-mcp&code=" + code + "&code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk&redirect_uri=https://example.com/callback"
+	tokenForm := "grant_type=authorization_code&client_id=" + url.QueryEscape(mcpCfg.OAuthClientID) + "&client_secret=" + url.QueryEscape(mcpCfg.OAuthClientSecret) + "&code=" + code + "&code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk&redirect_uri=https://example.com/callback"
 	tokenReq := httptest.NewRequest("POST", "/oauth/token", strings.NewReader(tokenForm))
 	tokenReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	tokenRr := httptest.NewRecorder()
