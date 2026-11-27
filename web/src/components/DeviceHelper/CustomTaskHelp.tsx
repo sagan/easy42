@@ -36,7 +36,7 @@ ${taskGoal.trim() || "[Describe your task goal here, e.g. Install and configure 
 ### Easy42 Device Helper Task Architecture:
 Easy42 executes tasks over SSH on remote nodes (Debian, Ubuntu, Alpine, OpenWrt, Arch).
 For each task, files are placed in: \`~/.config/easy42/tasks/<task_id>/\`
-When executed, easy42 creates an isolated temporary directory \`/tmp/.easy42_task_<task_id>_<rand>/\` on target nodes, uploads the task scripts along with \`common.sh\`, and executes them with root privileges.
+When executed, Easy42 creates an isolated temporary directory \`/tmp/.easy42_task_<task_id>_<rand>/\` on target nodes, uploads the task scripts along with \`common.sh\`, and executes them with root privileges.
 
 ### Requirements:
 1. **run.sh** (REQUIRED, mode 0755):
@@ -243,7 +243,7 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
           How Custom Tasks Work
         </Typography>
         <Typography variant="body2" sx={{ color: "#475569", mb: 1 }}>
-          For safety and simplicity, custom tasks are managed directly in your easy42 data directory:
+          For safety and simplicity, custom tasks are managed directly in your Easy42 data directory:
         </Typography>
 
         <Box
@@ -322,7 +322,7 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
             </Box>
             <Typography variant="caption" sx={{ color: "#64748b", display: "block", lineHeight: 1.5 }}>
               Checks node state before running. Exit <strong>0</strong> = Needs Execution, <strong>10</strong> = Already
-              Done, <strong>20</strong> = Incompatible. If omitted, easy42 marks task as Ready.
+              Done, <strong>20</strong> = Incompatible. If omitted, Easy42 marks task as Ready.
             </Typography>
           </Box>
 
@@ -349,7 +349,7 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
             </Box>
             <Typography variant="caption" sx={{ color: "#64748b", display: "block", lineHeight: 1.5 }}>
               Metadata defining title, description, category, weight, and an optional <code>selector</code> that
-              restricts which nodes the task can run on. If omitted, easy42 auto-formats the directory name (e.g.{" "}
+              restricts which nodes the task can run on. If omitted, Easy42 auto-formats the directory name (e.g.{" "}
               <code>install_bird</code> &rarr; "Install Bird").
             </Typography>
           </Box>

@@ -186,7 +186,7 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
               Export Diagram
             </Typography>
             <Typography variant="caption" sx={{ fontSize: "0.75rem", color: "#64748B", display: "block" }}>
-              Export easy42 cluster network topology to standalone SVG or PNG format
+              Export Easy42 cluster network topology to standalone SVG or PNG format
             </Typography>
           </Box>
         </Box>

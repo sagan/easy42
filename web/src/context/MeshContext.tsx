@@ -25,6 +25,7 @@ interface MeshContextType {
 
   // Data state
   nodes: Node[];
+  setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
   links: Link[];
   blocks: GraphBlock[];
   setBlocks: (blocks: GraphBlock[]) => void;
@@ -689,6 +690,7 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsUnlocked,
     checkAuth,
     nodes,
+    setNodes,
     links,
     blocks,
     setBlocks,

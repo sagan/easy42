@@ -387,7 +387,7 @@ export const LinkKeyActionModal: React.FC<LinkKeyActionModalProps> = ({
                               Generate Cryptographically Secure Random Key
                             </Typography>
                             <Typography variant="caption" sx={{ color: "#64748B" }}>
-                              easy42 server generates a standard 32-byte WireGuard key automatically.
+                              Easy42 server generates a standard 32-byte WireGuard key automatically.
                             </Typography>
                           </Box>
                         }

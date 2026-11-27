@@ -78,7 +78,7 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
       <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1, py: 1, px: 3 }}>
         {isBuiltin && (
           <Alert icon={<Lock size={16} />} severity="info" sx={{ py: 0.8, borderRadius: 2 }}>
-            Built-in policies are managed by easy42 and are read-only.
+            Built-in policies are managed by Easy42 and are read-only.
           </Alert>
         )}
 

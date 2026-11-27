@@ -1508,6 +1508,21 @@ func mergeApp(target *config.App, patch config.AppPatch, now time.Time) ([]Apply
 		checkField("group", target.Group, *patch.Group)
 		target.Group = *patch.Group
 	}
+	if patch.Tags != nil || patch.TagsAdd != nil || patch.TagsDel != nil {
+		base := target.Tags
+		if patch.Tags != nil {
+			base = *patch.Tags
+		}
+		newTags := applyStringSliceDelta(base, patch.TagsDel, patch.TagsAdd, tagEqual)
+		if !sliceEqual(target.Tags, newTags) {
+			diffs = append(diffs, ApplyFieldDiff{
+				Field:    "tags",
+				OldValue: target.Tags,
+				NewValue: newTags,
+			})
+			target.Tags = newTags
+		}
+	}
 	if patch.Note != nil && *patch.Note != target.Note {
 		checkField("note", target.Note, *patch.Note)
 		target.Note = *patch.Note
@@ -1589,6 +1604,14 @@ func createAppFromPatch(patch config.AppPatch, now time.Time) (*config.App, []Ap
 	if patch.Group != nil {
 		app.Group = *patch.Group
 	}
+	var baseTags []string
+	if patch.Tags != nil {
+		baseTags = *patch.Tags
+	}
+	if patch.TagsAdd != nil || patch.TagsDel != nil {
+		baseTags = applyStringSliceDelta(baseTags, patch.TagsDel, patch.TagsAdd, tagEqual)
+	}
+	app.Tags = baseTags
 	if patch.Note != nil {
 		app.Note = *patch.Note
 	}

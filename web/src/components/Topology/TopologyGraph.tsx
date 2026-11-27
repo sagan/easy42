@@ -159,7 +159,7 @@ export interface MaximumCliqueResult {
 /**
  * Computes the maximum full-mesh clique in an intra-block undirected graph.
  * Only WireGuard links are counted; manual type links (BGP-only data plane)
- * are excluded because easy42 does not manage WireGuard mesh data planes for them.
+ * are excluded because Easy42 does not manage WireGuard mesh data planes for them.
  * If the maximum clique has size < 2, returns an empty set and maxSize = 0.
  */
 export function getMaximumCliqueNodes(
@@ -276,7 +276,7 @@ export function checkLiveEndpointWorkingState(
  * Determines the working state of a link ("working", "not_working", or "unknown").
  * Prioritizes real-time live telemetry from connected agents, falling back to
  * recorded working_state in networkState.
- * For manual links (BGP-only data plane), easy42 does not manage WireGuard handshakes;
+ * For manual links (BGP-only data plane), Easy42 does not manage WireGuard handshakes;
  * if both participating nodes are online and reachable, the manual link is considered working.
  */
 export function getLinkWorkingState(
@@ -1846,7 +1846,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   // Ref to track whether initial fetch from server has completed
   const serverSyncInitialized = useRef(false);
 
-  // 1. Fetch blocks from easy42 server on page load (holds cache immediately, syncs from server)
+  // 1. Fetch blocks from Easy42 server on page load (holds cache immediately, syncs from server)
   useEffect(() => {
     let isMounted = true;
     api

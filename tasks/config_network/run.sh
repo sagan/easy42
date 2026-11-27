@@ -683,7 +683,7 @@ EOF
             TMP_SCRIPT="$(make_temp)"
             {
                 echo "#!/bin/sh"
-                echo "# easy42 custom network script"
+                echo "# Easy42 custom network script"
                 echo "### EASY42_CUSTOM_START"
                 cat "$SCRIPT_DIR/custom_network.sh"
                 echo ""

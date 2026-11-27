@@ -378,7 +378,8 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               {node.enable_dynamic_bird_config && (
                 <Chip
                   icon={<FileCode size={10} style={{ color: "#0D9488", marginLeft: 4 }} />}
-                  label="Dynamic BIRD"
+                  label="Dynamic"
+                  title="Dynamic BIRD"
                   size="small"
                   sx={{
                     height: 18,
@@ -2133,7 +2134,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               Standard Device Path: <code>/etc/bird_easy42.conf</code>
             </Typography>
             <Typography variant="body2" sx={{ fontSize: "0.78rem", color: "#334155", mb: 0.5 }}>
-              easy42 automatically deploys this configuration to <code>/etc/bird_easy42.conf</code> and executes{" "}
+              Easy42 automatically deploys this configuration to <code>/etc/bird_easy42.conf</code> and executes{" "}
               <code>birdc configure</code> on the node during synchronization.
             </Typography>
             <Typography variant="body2" sx={{ fontSize: "0.78rem", color: "#334155" }}>
@@ -2229,7 +2230,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               Standard Device Path: <code>/etc/easy42.nft</code>
             </Typography>
             <Typography variant="body2" sx={{ fontSize: "0.78rem", color: "#334155", mb: 0.5 }}>
-              easy42 automatically generates and synchronizes this file to <code>/etc/easy42.nft</code> on the node and
+              Easy42 automatically generates and synchronizes this file to <code>/etc/easy42.nft</code> on the node and
               executes it to apply the firewall and NAT rules.
             </Typography>
             <Typography variant="body2" sx={{ fontSize: "0.78rem", color: "#334155" }}>

@@ -1255,7 +1255,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
           ) : isExternal ? (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <Alert severity="info" sx={{ borderRadius: 2 }}>
-                External peers represent unmanaged private or DN42 network nodes. easy42 does not connect via SSH to
+                External peers represent unmanaged private or DN42 network nodes. Easy42 does not connect via SSH to
                 this node; it is only used to configure WireGuard and BGP peering on your managed nodes.
               </Alert>
 
@@ -2238,7 +2238,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     placeholder={
                       "# Custom hosts records for this node (IP hostname [aliases...]):\n192.168.1.10 db.internal db\n10.0.0.5 gitlab.lan\n- example.com"
                     }
-                    helperText="Custom /etc/hosts records for this node. Merged with global extra hosts and cluster node IP hosts (priority: node extra hosts > global extra hosts > easy42 node IP hosts). Use '-' as IP to unset host(s)."
+                    helperText="Custom /etc/hosts records for this node. Merged with global extra hosts and cluster node IP hosts (priority: node extra hosts > global extra hosts > Easy42 node IP hosts). Use '-' as IP to unset host(s)."
                     disabled={saving}
                     InputProps={{
                       sx: {
@@ -2328,7 +2328,8 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                             Dynamic BIRD Config (enable_dynamic_bird_config)
                           </Typography>
                           <Chip
-                            label="Dynamic BIRD"
+                            label="Dynamic"
+                            title="Dynamic BIRD"
                             size="small"
                             sx={{
                               height: 20,

@@ -47,12 +47,15 @@ import {
   Radio,
   FileCode,
   Terminal,
+  Star,
 } from "lucide-react";
 import { useMesh } from "../context/MeshContext";
+import { api } from "../api/client";
 import { Node, NodeLiveStatus } from "../types/api";
 import { getLinkWorkingState } from "../components/Topology/TopologyGraph";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { isAgentVersionOutdated } from "../utils/version";
+import { isFavourite, toggleFavouriteTag } from "../utils/common";
 
 export type SortField =
   | "name"
@@ -179,7 +182,11 @@ const NetworkIpCell: React.FC<NetworkIpCellProps> = ({
     <Box sx={{ display: "flex", flexDirection: "column", gap: 0.4 }}>
       {ip && (
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, whiteSpace: "nowrap" }}>
-          <Typography variant="body2" className="mono-font" sx={{ fontWeight: 600, color: ipColor, fontSize: "0.82rem" }}>
+          <Typography
+            variant="body2"
+            className="mono-font"
+            sx={{ fontWeight: 600, color: ipColor, fontSize: "0.82rem" }}
+          >
             {ip}
           </Typography>
           <Tooltip title={copiedId === `${nodeName}-${copyKeyPrefix}` ? "Copied!" : copyTooltip}>
@@ -253,6 +260,7 @@ const NetworkIpCell: React.FC<NetworkIpCellProps> = ({
 export const NodesPage: React.FC = () => {
   const {
     nodes,
+    setNodes,
     links,
     nodeStatuses,
     networkState,
@@ -265,6 +273,7 @@ export const NodesPage: React.FC = () => {
     updatingState,
     blocks,
     serverAgentVersion,
+    setStateToast,
   } = useMesh();
 
   const navigate = useNavigate();
@@ -295,6 +304,31 @@ export const NodesPage: React.FC = () => {
       setRefreshing(false);
     }
   }, [refreshFleetLive, handleUpdateState]);
+
+  const handleToggleFavourite = useCallback(
+    async (node: Node, e: React.MouseEvent) => {
+      e.stopPropagation();
+      const prevTags = node.tags;
+      const nextTags = toggleFavouriteTag(prevTags);
+      setNodes((prev) =>
+        prev.map((n) => (n.name === node.name ? { ...n, tags: nextTags.length > 0 ? nextTags : undefined } : n)),
+      );
+      try {
+        const updated = await api.updateNode(node.name, {
+          ...node,
+          tags: nextTags.length > 0 ? nextTags : undefined,
+        });
+        setNodes((prev) => prev.map((n) => (n.name === node.name ? updated : n)));
+      } catch (err: any) {
+        setNodes((prev) => prev.map((n) => (n.name === node.name ? { ...n, tags: prevTags } : n)));
+        setStateToast({
+          message: `Failed to update favourite for ${node.name}: ${err?.message || "Unknown error"}`,
+          severity: "error",
+        });
+      }
+    },
+    [setNodes, setStateToast],
+  );
 
   const handleCopy = useCallback((id: string, text: string) => {
     if (!text) return;
@@ -749,6 +783,12 @@ export const NodesPage: React.FC = () => {
   const sortedNodes = useMemo(() => {
     const list = [...filteredNodes];
     list.sort((a, b) => {
+      const favA = isFavourite(a.tags) ? 1 : 0;
+      const favB = isFavourite(b.tags) ? 1 : 0;
+      if (favA !== favB) {
+        return favB - favA;
+      }
+
       const liveA = liveMap.get(a.name);
       const liveB = liveMap.get(b.name);
       const statusA = nodeStatuses[a.name];
@@ -1565,6 +1605,19 @@ export const NodesPage: React.FC = () => {
                           <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A", lineHeight: 1.2 }}>
                             {n.name}
                           </Typography>
+                          <Tooltip title={isFavourite(n.tags) ? "Remove from favourites" : "Add to favourites"}>
+                            <IconButton
+                              size="small"
+                              onClick={(e) => handleToggleFavourite(n, e)}
+                              sx={{
+                                p: 0.25,
+                                color: isFavourite(n.tags) ? "#F59E0B" : "#CBD5E1",
+                                "&:hover": { color: "#F59E0B", bgcolor: "#FFFBEB" },
+                              }}
+                            >
+                              <Star size={15} fill={isFavourite(n.tags) ? "#F59E0B" : "none"} />
+                            </IconButton>
+                          </Tooltip>
                           {(n.is_client || n.is_external) && (
                             <Chip
                               label={n.is_client ? "CLIENT" : "EXTERNAL"}
@@ -1599,7 +1652,8 @@ export const NodesPage: React.FC = () => {
                           {n.enable_dynamic_bird_config && (
                             <Chip
                               icon={<FileCode size={10} style={{ color: "#0D9488", marginLeft: 4 }} />}
-                              label="Dynamic BIRD"
+                              label="Dynamic"
+                              title="Dynamic BIRD"
                               size="small"
                               sx={{
                                 height: 18,
@@ -1871,7 +1925,7 @@ export const NodesPage: React.FC = () => {
                         Agent Not Installed
                       </Typography>
                       <Typography variant="caption" sx={{ color: "#94A3B8", fontSize: "0.7rem", maxWidth: 220 }}>
-                        Deploy the easy42 agent to stream realtime CPU, memory, and telemetry.
+                        Deploy the Easy42 agent to stream realtime CPU, memory, and telemetry.
                       </Typography>
                     </Box>
                   )}
@@ -1915,29 +1969,31 @@ export const NodesPage: React.FC = () => {
                       {!!n.ip &&
                         typeof networkSettings?.data?.node_web_terminal_url === "string" &&
                         /^https?:\/\//i.test(networkSettings.data.node_web_terminal_url.trim()) && (
-                        <Tooltip title="Web Terminal">
-                          <span>
-                            <IconButton
-                              size="small"
-                              href={networkSettings.data.node_web_terminal_url.trim().replace("%i", encodeURIComponent(n.ip))}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              sx={{
-                                color: "#4F46E5",
-                                bgcolor: "#EEF2FF",
-                                "&:hover": { bgcolor: "#E0E7FF" },
-                                "&.Mui-disabled": { bgcolor: "#F1F5F9", color: "#CBD5E1" },
-                                p: 0.7,
-                              }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                              }}
-                            >
-                              <Terminal size={15} />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                      )}
+                          <Tooltip title="Web Terminal">
+                            <span>
+                              <IconButton
+                                size="small"
+                                href={networkSettings.data.node_web_terminal_url
+                                  .trim()
+                                  .replace("%i", encodeURIComponent(n.ip))}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                sx={{
+                                  color: "#4F46E5",
+                                  bgcolor: "#EEF2FF",
+                                  "&:hover": { bgcolor: "#E0E7FF" },
+                                  "&.Mui-disabled": { bgcolor: "#F1F5F9", color: "#CBD5E1" },
+                                  p: 0.7,
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                }}
+                              >
+                                <Terminal size={15} />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        )}
                       <Tooltip title={agentInstalled ? "Historical Charts & Telemetry" : "Agent not installed"}>
                         <span>
                           <IconButton
@@ -2334,6 +2390,21 @@ export const NodesPage: React.FC = () => {
                           }}
                         >
                           {n.name}
+                        </Typography>
+                        <Tooltip title={isFavourite(n.tags) ? "Remove from favourites" : "Add to favourites"}>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => handleToggleFavourite(n, e)}
+                            sx={{
+                              p: 0.25,
+                              color: isFavourite(n.tags) ? "#F59E0B" : "#CBD5E1",
+                              "&:hover": { color: "#F59E0B", bgcolor: "#FFFBEB" },
+                            }}
+                          >
+                            <Star size={14} fill={isFavourite(n.tags) ? "#F59E0B" : "none"} />
+                          </IconButton>
+                        </Tooltip>
+                        <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, flexWrap: "wrap" }}>
                           {(n.is_client || n.is_external) && (
                             <Chip
                               label={n.is_client ? "CLIENT" : "EXTERNAL"}
@@ -2369,6 +2440,7 @@ export const NodesPage: React.FC = () => {
                           {n.enable_dynamic_bird_config && (
                             <Chip
                               label="Dynamic"
+                              title="Dynamic BIRD"
                               size="small"
                               sx={{
                                 height: 16,
@@ -2382,7 +2454,7 @@ export const NodesPage: React.FC = () => {
                               }}
                             />
                           )}
-                        </Typography>
+                        </Box>
                       </Box>
                     </TableCell>
                     <TableCell>
@@ -2719,23 +2791,25 @@ export const NodesPage: React.FC = () => {
                       {!!n.ip &&
                         typeof networkSettings?.data?.node_web_terminal_url === "string" &&
                         /^https?:\/\//i.test(networkSettings.data.node_web_terminal_url.trim()) && (
-                        <Tooltip title="Web Terminal">
-                          <span>
-                            <IconButton
-                              size="small"
-                              href={networkSettings.data.node_web_terminal_url.trim().replace("%i", encodeURIComponent(n.ip))}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              sx={{
-                                color: "#4F46E5",
-                                "&.Mui-disabled": { color: "#CBD5E1" },
-                              }}
-                            >
-                              <Terminal size={16} />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                      )}
+                          <Tooltip title="Web Terminal">
+                            <span>
+                              <IconButton
+                                size="small"
+                                href={networkSettings.data.node_web_terminal_url
+                                  .trim()
+                                  .replace("%i", encodeURIComponent(n.ip))}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                sx={{
+                                  color: "#4F46E5",
+                                  "&.Mui-disabled": { color: "#CBD5E1" },
+                                }}
+                              >
+                                <Terminal size={16} />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        )}
                       <Tooltip title={agentInstalled ? "Historical Charts & Telemetry" : "Agent not installed"}>
                         <span>
                           <IconButton

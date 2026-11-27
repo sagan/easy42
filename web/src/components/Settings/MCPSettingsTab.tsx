@@ -666,7 +666,7 @@ export const MCPSettingsTab: React.FC = () => {
       case "stdio":
         return {
           filename: "Local Stdio Command (claude_desktop_config.json / Cursor)",
-          pathNote: "Runs directly on the host using the local easy42 binary without HTTP transport",
+          pathNote: "Runs directly on the host using the local Easy42 binary without HTTP transport",
           code: JSON.stringify(
             {
               mcpServers: {

@@ -1460,7 +1460,8 @@ export const NodeDetailPage: React.FC = () => {
                   {node?.enable_dynamic_bird_config && (
                     <Chip
                       icon={<FileCode size={12} style={{ color: "#0D9488" }} />}
-                      label="Dynamic BIRD Config"
+                      label="Dynamic"
+                      title="Dynamic BIRD"
                       size="small"
                       sx={{
                         height: 24,
@@ -1564,26 +1565,28 @@ export const NodeDetailPage: React.FC = () => {
                 {!!node?.ip &&
                   typeof networkSettings?.data?.node_web_terminal_url === "string" &&
                   /^https?:\/\//i.test(networkSettings.data.node_web_terminal_url.trim()) && (
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    title="Web Terminal"
-                    startIcon={<Terminal size={15} />}
-                    href={networkSettings.data.node_web_terminal_url.trim().replace("%i", encodeURIComponent(node.ip))}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    sx={{
-                      color: "#0891B2",
-                      borderColor: "#CFFAFE",
-                      bgcolor: "#ECFEFF",
-                      fontWeight: 600,
-                      fontSize: "0.78rem",
-                      "&:hover": { bgcolor: "#CFFAFE", borderColor: "#A5F3FC" },
-                    }}
-                  >
-                    Shell
-                  </Button>
-                )}
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      title="Web Terminal"
+                      startIcon={<Terminal size={15} />}
+                      href={networkSettings.data.node_web_terminal_url
+                        .trim()
+                        .replace("%i", encodeURIComponent(node.ip))}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      sx={{
+                        color: "#0891B2",
+                        borderColor: "#CFFAFE",
+                        bgcolor: "#ECFEFF",
+                        fontWeight: 600,
+                        fontSize: "0.78rem",
+                        "&:hover": { bgcolor: "#CFFAFE", borderColor: "#A5F3FC" },
+                      }}
+                    >
+                      Shell
+                    </Button>
+                  )}
                 <Button
                   variant="outlined"
                   size="small"
@@ -2295,7 +2298,7 @@ export const NodeDetailPage: React.FC = () => {
                       <>
                         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <Typography variant="body2" sx={{ color: "#64748B" }}>
-                            easy42 Agent Version:
+                            Easy42 Agent Version:
                           </Typography>
                           <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
                             <Typography
@@ -2529,7 +2532,7 @@ export const NodeDetailPage: React.FC = () => {
                     Telemetry History ({points.length} samples collected)
                   </Typography>
                   <Typography variant="caption" sx={{ color: "#64748B" }}>
-                    Realtime metrics aggregated and stored by easy42 time-series storage
+                    Realtime metrics aggregated and stored by Easy42 time-series storage
                   </Typography>
                 </Box>
               </Box>
@@ -2619,7 +2622,7 @@ export const NodeDetailPage: React.FC = () => {
                   No Historical Telemetry Recorded Yet
                 </Typography>
                 <Typography variant="body2" sx={{ color: "#64748B", mt: 0.5, maxWidth: 450, mx: "auto" }}>
-                  Telemetry points are pushed periodically by the easy42 background agent. Once the agent runs for a few
+                  Telemetry points are pushed periodically by the Easy42 background agent. Once the agent runs for a few
                   minutes, historical charts will populate here.
                 </Typography>
               </Paper>

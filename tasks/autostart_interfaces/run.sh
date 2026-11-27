@@ -16,13 +16,13 @@ esac
 SERVICE_NAME="easy42-wg-autostart"
 SERVICE_FILE="$(get_service_file_path "$SERVICE_NAME")"
 
-echo "=== Installing easy42 WireGuard autostart service ($INIT_SYSTEM) ==="
+echo "=== Installing Easy42 WireGuard autostart service ($INIT_SYSTEM) ==="
 
 case "$INIT_SYSTEM" in
     systemd)
         cat << 'EOF' | $SUDO tee "$SERVICE_FILE" >/dev/null
 [Unit]
-Description=easy42 WireGuard interfaces autostart
+Description=Easy42 WireGuard interfaces autostart
 After=network-online.target
 Wants=network-online.target
 
@@ -43,7 +43,7 @@ EOF
         cat << 'EOF' | $SUDO tee "$SERVICE_FILE" >/dev/null
 #!/sbin/openrc-run
 
-description="easy42 WireGuard interfaces autostart"
+description="Easy42 WireGuard interfaces autostart"
 
 depend() {
     need net
@@ -51,7 +51,7 @@ depend() {
 }
 
 start() {
-    ebegin "Starting easy42 WireGuard interfaces"
+    ebegin "Starting Easy42 WireGuard interfaces"
     for conf in /etc/wireguard/wg42*.conf; do
         [ -f "$conf" ] || continue
         iface="${conf##*/}"
@@ -62,7 +62,7 @@ start() {
 }
 
 stop() {
-    ebegin "Stopping easy42 WireGuard interfaces"
+    ebegin "Stopping Easy42 WireGuard interfaces"
     for conf in /etc/wireguard/wg42*.conf; do
         [ -f "$conf" ] || continue
         iface="${conf##*/}"

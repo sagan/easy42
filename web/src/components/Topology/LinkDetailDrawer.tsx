@@ -837,7 +837,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               </Box>
               <Typography variant="caption" sx={{ color: "#0369A1", display: "block", lineHeight: 1.4 }}>
                 Existing direct physical or logical link (e.g. LAN, direct cable, or unmanaged tunnel) between{" "}
-                {link.from.name} and {link.to.name}. easy42 does not manage WireGuard interfaces, BIRD BGP sessions, or
+                {link.from.name} and {link.to.name}. Easy42 does not manage WireGuard interfaces, BIRD BGP sessions, or
                 nftables for this link.
               </Typography>
             </Box>
@@ -878,7 +878,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 {link.from.interface && link.to.interface
                   ? `interfaces (${link.from.interface} / ${link.to.interface})`
                   : `interface (${link.from.interface || link.to.interface})`}{" "}
-                manually created and managed by you. easy42 automatically manages BIRD BGP routing sessions and adds
+                manually created and managed by you. Easy42 automatically manages BIRD BGP routing sessions and adds
                 interfaces to the <code>easy42_ifname</code> nftables set.
               </Typography>
             </Box>

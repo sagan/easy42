@@ -409,6 +409,7 @@ func (m *Manager) DuplicateApp(appID string) (config.App, error) {
 		Name:        newName,
 		Description: original.Description,
 		Group:       original.Group,
+		Tags:        append([]string(nil), original.Tags...),
 		Note:        original.Note,
 		URL:         original.URL,
 		Version:     original.Version,

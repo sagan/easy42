@@ -1122,7 +1122,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
 
           {isBothExternal && (
             <Alert severity="error" sx={{ borderRadius: 2 }}>
-              Cannot link two external peers together. easy42 is a mesh control plane for your managed nodes; an
+              Cannot link two external peers together. Easy42 is a mesh control plane for your managed nodes; an
               external peer (DN42 / upstream) must connect to one of your managed nodes.
             </Alert>
           )}
@@ -1208,7 +1208,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     </Typography>
                   </Box>
                   <Typography variant="caption" sx={{ color: "#64748B", display: "block", lineHeight: 1.3 }}>
-                    Data plane managed manually (ethernet/tunnel). easy42 manages BGP peering & nftables.
+                    Data plane managed manually (ethernet/tunnel). Easy42 manages BGP peering & nftables.
                   </Typography>
                 </Box>
 
@@ -1566,7 +1566,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       variant="caption"
                       sx={{ color: "#64748B", display: "block", fontSize: "0.72rem", lineHeight: 1.4, mt: 0.3 }}
                     >
-                      Enables a 256-bit symmetric key for post-quantum resistance. By default, easy42 generates and
+                      Enables a 256-bit symmetric key for post-quantum resistance. By default, Easy42 generates and
                       encrypts the PSK automatically. You can also specify a custom PSK below.
                     </Typography>
 
@@ -1790,7 +1790,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                         Use IP (Resolve external peer domain to IP)
                       </Typography>
                       <Typography variant="caption" sx={{ color: "#64748B", display: "block", fontSize: "0.72rem" }}>
-                        Resolves remote endpoint hostname to IP in easy42 server and uses IP in {managedNode.name}'s
+                        Resolves remote endpoint hostname to IP in Easy42 server and uses IP in {managedNode.name}'s
                         WireGuard config.
                       </Typography>
                     </Box>
@@ -2200,7 +2200,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 }}
               >
                 <strong>Virtual Link Mode:</strong> Represents an existing physical or logical direct link (e.g. direct
-                cable, switch/LAN, or unmanaged tunnel) between these two nodes. easy42 will <em>not</em> configure
+                cable, switch/LAN, or unmanaged tunnel) between these two nodes. Easy42 will <em>not</em> configure
                 WireGuard keys, BIRD BGP peering sessions, or nftables interfaces for this link. All interface, IP, and
                 note fields below are <strong>optional</strong> and saved for your reference only.
               </Alert>
@@ -2419,9 +2419,9 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   "& .MuiAlert-icon": { color: "#7C3AED" },
                 }}
               >
-                <strong>Manual Link Mode:</strong> easy42 will <em>not</em> create or manage WireGuard interfaces for
+                <strong>Manual Link Mode:</strong> Easy42 will <em>not</em> create or manage WireGuard interfaces for
                 this link. You create and manage the data plane link manually (via physical ethernet, VLAN, or custom
-                tunnel). easy42 will configure BIRD BGP peering and automatically add the specified interfaces to the{" "}
+                tunnel). Easy42 will configure BIRD BGP peering and automatically add the specified interfaces to the{" "}
                 <code>easy42_ifname</code> nftables set.
               </Alert>
 
@@ -3006,7 +3006,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                                 variant="caption"
                                 sx={{ color: "#64748B", display: "block", fontSize: "0.72rem" }}
                               >
-                                Resolves peer's endpoint hostname to IP in easy42 server and uses IP in {fromNode.name}
+                                Resolves peer's endpoint hostname to IP in Easy42 server and uses IP in {fromNode.name}
                                 's WireGuard config.
                               </Typography>
                             </Box>
@@ -3385,7 +3385,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                                 variant="caption"
                                 sx={{ color: "#64748B", display: "block", fontSize: "0.72rem" }}
                               >
-                                Resolves peer's endpoint hostname to IP in easy42 server and uses IP in {toNode.name}'s
+                                Resolves peer's endpoint hostname to IP in Easy42 server and uses IP in {toNode.name}'s
                                 WireGuard config.
                               </Typography>
                             </Box>

@@ -69,7 +69,7 @@ export const UnlockModal: React.FC<UnlockModalProps> = ({ open, onClose, onUnloc
           <KeyRound size={18} />
         </Box>
         <Typography variant="h6" sx={{ fontWeight: 700, color: "#0F172A" }}>
-          Unlock easy42 Vault
+          Unlock Easy42 Vault
         </Typography>
       </DialogTitle>
 

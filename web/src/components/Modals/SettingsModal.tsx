@@ -1653,7 +1653,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   </Typography>
                 </Box>
                 <Typography variant="body2" sx={{ color: "#64748B" }}>
-                  Update your easy42 admin password. Changing the password will re-encrypt your master data encryption
+                  Update your Easy42 admin password. Changing the password will re-encrypt your master data encryption
                   key (DEK) and invalidate other active sessions.
                 </Typography>
 
@@ -1975,7 +1975,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     }
                     value={extraHosts}
                     onChange={(e) => setExtraHosts(e.target.value)}
-                    helperText="Global custom /etc/hosts records injected into all cluster nodes with Update Hosts enabled. Merged with node extra hosts and cluster node IP hosts (priority: node extra hosts > global extra hosts > easy42 node IP hosts). Use '-' as IP to unset host(s)."
+                    helperText="Global custom /etc/hosts records injected into all cluster nodes with Update Hosts enabled. Merged with node extra hosts and cluster node IP hosts (priority: node extra hosts > global extra hosts > Easy42 node IP hosts). Use '-' as IP to unset host(s)."
                     disabled={networkSaving}
                   />
 
@@ -3164,7 +3164,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   </Typography>
                 </Box>
                 <Typography variant="body2" sx={{ color: "#0C4A6E", fontSize: "0.85rem", lineHeight: 1.5 }}>
-                  Automatically publish your easy42 nodes' main IPv4 (<b>A</b>) and IPv6 (<b>AAAA</b>) addresses to
+                  Automatically publish your Easy42 nodes' main IPv4 (<b>A</b>) and IPv6 (<b>AAAA</b>) addresses to
                   Cloudflare DNS. Records are automatically updated when adding or renaming nodes, or can be
                   synchronized on-demand.
                 </Typography>
@@ -3569,7 +3569,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       Server Background Tasks
                     </Typography>
                     <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", lineHeight: 1.4 }}>
-                      Central management for easy42 background tasks. The task list is immutable; configure schedules,
+                      Central management for Easy42 background tasks. The task list is immutable; configure schedules,
                       toggle automation, or run any task on demand.
                     </Typography>
                   </Box>
@@ -4711,7 +4711,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       Telegram Bot & External Integrations
                     </Typography>
                     <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", lineHeight: 1.4 }}>
-                      Configure the easy42 Telegram bot for real-time fleet notifications and chat queries, or export
+                      Configure the Easy42 Telegram bot for real-time fleet notifications and chat queries, or export
                       live metrics to Prometheus, VictoriaMetrics, and Grafana.
                     </Typography>
                   </Box>
@@ -4992,11 +4992,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                           sx={{ color: "#64748B", fontSize: "0.78rem", mt: 0.5, display: "block" }}
                         >
                           Used as implicit authentication source. Only this single user is authorized to interact with
-                          the easy42 server via Telegram and receive node alerts.
+                          the Easy42 server via Telegram and receive node alerts.
                         </Typography>
                       </Box>
 
-                      {/* Field 3: easy42 Server URL */}
+                      {/* Field 3: Easy42 Server URL */}
                       <Box>
                         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.75 }}>
                           <Typography
@@ -5009,7 +5009,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                               fontSize: "0.75rem",
                             }}
                           >
-                            easy42 Server URL (Webhook & Notification Links) <span style={{ color: "#EF4444" }}>*</span>
+                            Easy42 Server URL (Webhook & Notification Links) <span style={{ color: "#EF4444" }}>*</span>
                           </Typography>
                           {tgServerURL !== window.location.origin && (
                             <Button
@@ -5321,7 +5321,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     </Box>
 
                     <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem" }}>
-                      easy42 serves live fleet metrics over HTTP. Metrics are rendered from an in-memory state cache for
+                      Easy42 serves live fleet metrics over HTTP. Metrics are rendered from an in-memory state cache for
                       near-instant response times and zero disk overhead.
                     </Typography>
 
@@ -5684,12 +5684,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         </Box>
                       </Box>
 
-                      {/* Subcard D: easy42 Fleet */}
+                      {/* Subcard D: Easy42 Fleet */}
                       <Box sx={{ p: 1, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
                           <Activity size={16} color="#7C3AED" />
                           <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
-                            easy42 Fleet Cluster State
+                            Easy42 Fleet Cluster State
                           </Typography>
                         </Box>
                         <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.8rem", mb: 1 }}>
@@ -5895,7 +5895,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                 </Alert>
               )}
 
-              {/* Section 1: easy42 Go Controller Server */}
+              {/* Section 1: Easy42 Go Controller Server */}
               <Paper
                 elevation={0}
                 sx={{
@@ -5910,7 +5910,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <Cpu size={18} color="#4F46E5" />
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", fontSize: "0.95rem" }}>
-                    easy42 Go Server
+                    Easy42 Go Server
                   </Typography>
                 </Box>
                 <Typography variant="caption" sx={{ color: "#64748B", mt: -1 }}>
@@ -6074,7 +6074,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   />
                 </Box>
                 <Typography variant="caption" sx={{ color: "#64748B", mt: -1 }}>
-                  Active easy42 controller process bindings, local storage paths, and configuration locations.
+                  Active Easy42 controller process bindings, local storage paths, and configuration locations.
                 </Typography>
 
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
@@ -6293,7 +6293,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                 </Box>
               </Paper>
 
-              {/* Section 3: easy42 Bundled Agent */}
+              {/* Section 3: Easy42 Bundled Agent */}
               <Paper
                 elevation={0}
                 sx={{
@@ -6588,7 +6588,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
             <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1, py: 1, px: 3 }}>
               {policyDialogMode === "view" && (
                 <Alert icon={<Lock size={16} />} severity="info" sx={{ py: 0.5, borderRadius: 2 }}>
-                  Built-in policies are managed by easy42 and are read-only.
+                  Built-in policies are managed by Easy42 and are read-only.
                 </Alert>
               )}
 
@@ -6809,7 +6809,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   borderRadius: 1,
                   bgcolor: "#F8FAFC",
                   border: "1px solid #E2E8F0",
-                }} 
+                }}
               >
                 <Typography
                   variant="subtitle2"
@@ -7596,7 +7596,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   <a href="https://github.com/go-sprout/sprout" target="_blank" rel="noreferrer">
                     sprout functions
                   </a>
-                  , easy42 context objects, and some custom functions: <b>eval</b>: execute a JavaScript snippet (using{" "}
+                  , Easy42 context objects, and some custom functions: <b>eval</b>: execute a JavaScript snippet (using{" "}
                   <a href="https://github.com/dop251/goja" target="_blank" rel="noreferrer">
                     goja
                   </a>

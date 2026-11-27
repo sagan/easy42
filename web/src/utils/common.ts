@@ -49,3 +49,22 @@ export function downloadTextFile(filename: string, content: string) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+export const FAV_TAG = "fav";
+
+/**
+ * Returns true if the given tag list contains the special "fav" tag (case-insensitive).
+ */
+export function isFavourite(tags?: string[]): boolean {
+  return Boolean(tags?.some((t) => t.trim().toLowerCase() === FAV_TAG));
+}
+
+/**
+ * Toggles the special "fav" tag in a tag list and returns the updated array.
+ */
+export function toggleFavouriteTag(tags?: string[]): string[] {
+  if (isFavourite(tags)) {
+    return (tags || []).filter((t) => t.trim().toLowerCase() !== FAV_TAG);
+  }
+  return [...(tags || []), FAV_TAG];
+}

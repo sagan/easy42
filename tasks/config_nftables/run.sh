@@ -7,7 +7,7 @@ fi
 # Ensure /etc/easy42.nft exists as placeholder so syntax check passes
 if [ ! -f /etc/easy42.nft ]; then
     echo "Creating placeholder /etc/easy42.nft..."
-    printf "#!/usr/sbin/nft -f\n# Placeholder created by easy42 Device Helper\n" | $SUDO tee /etc/easy42.nft >/dev/null
+    printf "#!/usr/sbin/nft -f\n# Placeholder created by Easy42 Device Helper\n" | $SUDO tee /etc/easy42.nft >/dev/null
     $SUDO chmod 755 /etc/easy42.nft
 fi
 
@@ -39,7 +39,7 @@ if is_service_installed nftables; then
         backup_file "$CONF_FILE"
 
         echo "Adding include to $CONF_FILE..."
-        printf "\n# Added by easy42 Device Helper\ninclude \"/etc/easy42.nft\"\n" | $SUDO tee -a "$CONF_FILE" >/dev/null
+        printf "\n# Added by Easy42 Device Helper\ninclude \"/etc/easy42.nft\"\n" | $SUDO tee -a "$CONF_FILE" >/dev/null
     fi
 
     # Verify syntax if nft is installed
@@ -114,13 +114,13 @@ depend() {
 }
 
 start() {
-    ebegin "Loading easy42 nftables rules"
+    ebegin "Loading Easy42 nftables rules"
     nft -f /etc/easy42.nft
     eend $?
 }
 
 reload() {
-    ebegin "Reloading easy42 nftables rules"
+    ebegin "Reloading Easy42 nftables rules"
     nft -f /etc/easy42.nft
     eend $?
 }
@@ -136,7 +136,7 @@ EOF
 START=95
 
 EXTRA_COMMANDS="reload"
-EXTRA_HELP="        reload  Reload easy42 nftables rules"
+EXTRA_HELP="        reload  Reload Easy42 nftables rules"
 
 start() {
     nft -f /etc/easy42.nft

@@ -1085,6 +1085,7 @@ export interface App {
   name: string;
   description?: string;
   group?: string;
+  tags?: string[];
   note?: string;
   url?: string;
   version?: string;

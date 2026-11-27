@@ -605,6 +605,7 @@ func TestApply_CreateAndUpdateApp(t *testing.T) {
 				"main_content": "services:\n  web:\n    image: nginx\n",
 				"env_content": "PORT=80\n",
 				"description": "My Web App",
+				"tags": ["web", "prod"],
 				"enabled": true
 			}
 		]
@@ -646,6 +647,9 @@ func TestApply_CreateAndUpdateApp(t *testing.T) {
 	if app.Description != "My Web App" || !app.Enabled {
 		t.Errorf("unexpected app state: %+v", app)
 	}
+	if len(app.Tags) != 2 || app.Tags[0] != "web" || app.Tags[1] != "prod" {
+		t.Errorf("expected app tags ['web', 'prod'], got %v", app.Tags)
+	}
 
 	// 3. Update existing app
 	patchUpdate := `{
@@ -653,6 +657,8 @@ func TestApply_CreateAndUpdateApp(t *testing.T) {
 			{
 				"name": "myapp",
 				"description": "Updated Web App",
+				"tags_add": ["edge"],
+				"tags_del": ["prod"],
 				"enabled": false
 			}
 		]
@@ -683,6 +689,9 @@ func TestApply_CreateAndUpdateApp(t *testing.T) {
 	}
 	if updatedApp.Description != "Updated Web App" || updatedApp.Enabled {
 		t.Errorf("expected description 'Updated Web App' and enabled=false, got %+v", updatedApp)
+	}
+	if len(updatedApp.Tags) != 2 || updatedApp.Tags[0] != "web" || updatedApp.Tags[1] != "edge" {
+		t.Errorf("expected updated app tags ['web', 'edge'], got %v", updatedApp.Tags)
 	}
 }
 

@@ -16,6 +16,7 @@ type App struct {
 	Name        string            `json:"name"`
 	Description string            `json:"description,omitempty"`
 	Group       string            `json:"group,omitempty" yaml:"group,omitempty"`
+	Tags        []string          `json:"tags,omitempty" yaml:"tags,omitempty"`
 	Note        string            `json:"note,omitempty"` // Markdown format text note
 	URL         string            `json:"url,omitempty" yaml:"url,omitempty"`
 	Version     string            `json:"version,omitempty" yaml:"version,omitempty"`

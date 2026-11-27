@@ -1,10 +1,10 @@
 #!/bin/sh
-# easy42 task helper common functions
+# Easy42 task helper common functions
 
 # Ensure safe execution
 set -e
 
-# Load node environment if injected by easy42 controller
+# Load node environment if injected by Easy42 controller
 COMMON_DIR="$(cd "$(dirname "$0")" && pwd)"
 if [ -f "$COMMON_DIR/.env" ]; then
     . "$COMMON_DIR/.env"

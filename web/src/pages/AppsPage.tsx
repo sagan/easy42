@@ -42,7 +42,6 @@ import {
 } from "@mui/material";
 import {
   Layers,
-  Bookmark,
   Plus,
   Trash2,
   Edit,
@@ -80,9 +79,11 @@ import {
   ShieldCheck,
   Play,
   KeyRound,
+  Star,
 } from "lucide-react";
 import { api } from "../api/client";
 import { useMesh } from "../context/MeshContext";
+import { isFavourite, toggleFavouriteTag } from "../utils/common";
 import { Link as RouterLink, useSearchParams, useNavigate, useParams } from "react-router-dom";
 import type {
   App,
@@ -278,6 +279,7 @@ export const AppsPage: React.FC = () => {
   const typeFilter: string = (APP_TYPE_FILTERS as readonly string[]).includes(rawUrlType) ? rawUrlType : "all";
   const rawUrlNode = searchParams.get("node") || "all";
   const groupFilter = searchParams.get("group") || "all";
+  const tagFilter = searchParams.get("tag") || "all";
   const view: "cards" | "table" = searchParams.get("view") === "table" ? "table" : "cards";
   const rawSort = searchParams.get("sort");
   const sortField = (APP_SORT_FIELDS as string[]).includes(rawSort || "")
@@ -416,7 +418,7 @@ export const AppsPage: React.FC = () => {
 
   // Helper to update URL query parameters (replaceState)
   const updateQueryParam = useCallback(
-    (updates: { type?: string; node?: string; view?: "cards" | "table"; group?: string }) => {
+    (updates: { type?: string; node?: string; view?: "cards" | "table"; group?: string; tag?: string }) => {
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
@@ -441,6 +443,13 @@ export const AppsPage: React.FC = () => {
               next.delete("group");
             }
           }
+          if (updates.tag !== undefined) {
+            if (updates.tag && updates.tag !== "all") {
+              next.set("tag", updates.tag);
+            } else {
+              next.delete("tag");
+            }
+          }
           if (updates.view !== undefined) {
             if (updates.view && updates.view !== "cards") {
               next.set("view", updates.view);
@@ -459,6 +468,8 @@ export const AppsPage: React.FC = () => {
   const handleSelectType = (type: string) => updateQueryParam({ type });
   const handleSelectNode = (node: string) => updateQueryParam({ node });
   const handleSelectGroup = (group: string) => updateQueryParam({ group: group === groupFilter ? "all" : group });
+  const handleSelectTag = (tag: string) =>
+    updateQueryParam({ tag: tag.toLowerCase() === tagFilter.toLowerCase() ? "all" : tag });
   const handleToggleView = (v: "cards" | "table") => updateQueryParam({ view: v });
 
   const handleRequestSort = useCallback(
@@ -487,6 +498,7 @@ export const AppsPage: React.FC = () => {
         next.delete("type");
         next.delete("node");
         next.delete("group");
+        next.delete("tag");
         return next;
       },
       { replace: true },
@@ -501,6 +513,7 @@ export const AppsPage: React.FC = () => {
         next.delete("search");
         next.delete("node");
         next.delete("group");
+        next.delete("tag");
         return next;
       },
       { replace: true },
@@ -535,6 +548,7 @@ export const AppsPage: React.FC = () => {
   const [formName, setFormName] = useState("");
   const [formDesc, setFormDesc] = useState("");
   const [formGroup, setFormGroup] = useState("");
+  const [formTags, setFormTags] = useState("");
   const [formNote, setFormNote] = useState("");
   const [formUrl, setFormUrl] = useState("");
   const [formType, setFormType] = useState<"docker" | "systemd" | "cron" | "script">("docker");
@@ -683,6 +697,7 @@ export const AppsPage: React.FC = () => {
     setFormName("");
     setFormDesc("");
     setFormGroup("");
+    setFormTags("");
     setFormNote("");
     setNoteEditMode("write");
     setFormUrl("");
@@ -740,6 +755,7 @@ export const AppsPage: React.FC = () => {
     setFormName(app.name);
     setFormDesc(app.description || "");
     setFormGroup(app.group || "");
+    setFormTags((app.tags || []).join(", "));
     setFormVersion(app.version || "");
     if (app.artifact) {
       setFormArtifactEnabled(true);
@@ -1029,10 +1045,20 @@ export const AppsPage: React.FC = () => {
         }
       }
 
+      const parsedTags = Array.from(
+        new Set(
+          formTags
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean),
+        ),
+      );
+
       const payload: Partial<App> = {
         name: formName.trim(),
         description: formDesc.trim(),
         group: formGroup.trim() || undefined,
+        tags: parsedTags.length > 0 ? parsedTags : undefined,
         version: formVersion.trim() || undefined,
         note: formNote,
         url: formUrl.trim(),
@@ -1399,6 +1425,30 @@ export const AppsPage: React.FC = () => {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
+  const handleToggleFavourite = useCallback(
+    async (app: App, e: React.MouseEvent) => {
+      e.stopPropagation();
+      const prevTags = app.tags;
+      const nextTags = toggleFavouriteTag(prevTags);
+      const nextTagsOrUndef = nextTags.length > 0 ? nextTags : undefined;
+      setApps((prev) => prev.map((a) => (a.id === app.id ? { ...a, tags: nextTagsOrUndef } : a)));
+      setDetailsApp((prev) => (prev && prev.id === app.id ? { ...prev, tags: nextTagsOrUndef } : prev));
+      try {
+        const updated = await api.updateApp(app.id, { ...app, tags: nextTagsOrUndef });
+        setApps((prev) => prev.map((a) => (a.id === app.id ? updated : a)));
+        setDetailsApp((prev) => (prev && prev.id === app.id ? updated : prev));
+      } catch (err: any) {
+        setApps((prev) => prev.map((a) => (a.id === app.id ? { ...a, tags: prevTags } : a)));
+        setDetailsApp((prev) => (prev && prev.id === app.id ? { ...prev, tags: prevTags } : prev));
+        setStateToast({
+          message: `Failed to update favourite for ${app.name}: ${err?.message || "Unknown error"}`,
+          severity: "error",
+        });
+      }
+    },
+    [setStateToast],
+  );
+
   const workloadApps = useMemo(() => apps.filter((a) => a.app_type !== "script"), [apps]);
   const scriptApps = useMemo(() => apps.filter((a) => a.app_type === "script"), [apps]);
 
@@ -1410,7 +1460,8 @@ export const AppsPage: React.FC = () => {
         const matchDesc = a.description?.toLowerCase().includes(q);
         const matchNote = a.note?.toLowerCase().includes(q);
         const matchGroup = a.group?.toLowerCase().includes(q);
-        if (!matchName && !matchDesc && !matchNote && !matchGroup) return false;
+        const matchTag = a.tags?.some((t) => t.toLowerCase().includes(q));
+        if (!matchName && !matchDesc && !matchNote && !matchGroup && !matchTag) return false;
       }
       if (typeFilter !== "all" && a.app_type !== typeFilter) {
         return false;
@@ -1426,9 +1477,16 @@ export const AppsPage: React.FC = () => {
           if ((a.group || "").trim().toLowerCase() !== groupFilter.trim().toLowerCase()) return false;
         }
       }
+      if (tagFilter !== "all") {
+        if (tagFilter === "untagged") {
+          if (a.tags && a.tags.length > 0) return false;
+        } else {
+          if (!a.tags || !a.tags.some((t) => t.trim().toLowerCase() === tagFilter.trim().toLowerCase())) return false;
+        }
+      }
       return true;
     });
-  }, [workloadApps, search, typeFilter, nodeFilter, groupFilter, nodes]);
+  }, [workloadApps, search, typeFilter, nodeFilter, groupFilter, tagFilter, nodes]);
 
   const filteredScripts = useMemo(() => {
     return scriptApps
@@ -1439,7 +1497,8 @@ export const AppsPage: React.FC = () => {
           const matchDesc = a.description?.toLowerCase().includes(q);
           const matchNote = a.note?.toLowerCase().includes(q);
           const matchGroup = a.group?.toLowerCase().includes(q);
-          if (!matchName && !matchDesc && !matchNote && !matchGroup) return false;
+          const matchTag = a.tags?.some((t) => t.toLowerCase().includes(q));
+          if (!matchName && !matchDesc && !matchNote && !matchGroup && !matchTag) return false;
         }
         if (nodeFilter !== "all") {
           const nodeObj = nodes.find((n) => n.name === nodeFilter);
@@ -1452,10 +1511,22 @@ export const AppsPage: React.FC = () => {
             if ((a.group || "").trim().toLowerCase() !== groupFilter.trim().toLowerCase()) return false;
           }
         }
+        if (tagFilter !== "all") {
+          if (tagFilter === "untagged") {
+            if (a.tags && a.tags.length > 0) return false;
+          } else {
+            if (!a.tags || !a.tags.some((t) => t.trim().toLowerCase() === tagFilter.trim().toLowerCase())) return false;
+          }
+        }
         return true;
       })
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
-  }, [scriptApps, scriptSearch, nodeFilter, groupFilter, nodes]);
+      .sort((a, b) => {
+        const favA = isFavourite(a.tags) ? 1 : 0;
+        const favB = isFavourite(b.tags) ? 1 : 0;
+        if (favA !== favB) return favB - favA;
+        return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+      });
+  }, [scriptApps, scriptSearch, nodeFilter, groupFilter, tagFilter, nodes]);
 
   const appGroups = useMemo(() => {
     const set = new Set<string>();
@@ -1485,10 +1556,44 @@ export const AppsPage: React.FC = () => {
     return scriptApps.filter((a) => !a.group || !a.group.trim()).length;
   }, [scriptApps]);
 
+  const appTags = useMemo(() => {
+    const set = new Set<string>();
+    workloadApps.forEach((a) => {
+      a.tags?.forEach((t) => {
+        const trimmed = t.trim();
+        if (trimmed) set.add(trimmed);
+      });
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }, [workloadApps]);
+
+  const scriptTags = useMemo(() => {
+    const set = new Set<string>();
+    scriptApps.forEach((a) => {
+      a.tags?.forEach((t) => {
+        const trimmed = t.trim();
+        if (trimmed) set.add(trimmed);
+      });
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }, [scriptApps]);
+
+  const untaggedAppsCount = useMemo(() => {
+    return workloadApps.filter((a) => !a.tags || a.tags.length === 0).length;
+  }, [workloadApps]);
+
+  const untaggedScriptsCount = useMemo(() => {
+    return scriptApps.filter((a) => !a.tags || a.tags.length === 0).length;
+  }, [scriptApps]);
+
   // Sorted apps for both list (table) and card views
   const sortedApps = useMemo(() => {
     const list = [...filteredApps];
     list.sort((a, b) => {
+      const favA = isFavourite(a.tags) ? 1 : 0;
+      const favB = isFavourite(b.tags) ? 1 : 0;
+      if (favA !== favB) return favB - favA;
+
       let comparison = 0;
       switch (sortField) {
         case "name":
@@ -1514,7 +1619,9 @@ export const AppsPage: React.FC = () => {
     return list;
   }, [filteredApps, sortField, sortOrder]);
 
-  const isFiltering = Boolean(search.trim() || typeFilter !== "all" || nodeFilter !== "all" || groupFilter !== "all");
+  const isFiltering = Boolean(
+    search.trim() || typeFilter !== "all" || nodeFilter !== "all" || groupFilter !== "all" || tagFilter !== "all",
+  );
 
   const filteredVars = useMemo(() => {
     return variables.filter((v) => {
@@ -2302,7 +2409,7 @@ export const AppsPage: React.FC = () => {
               <TextField
                 size="small"
                 type="search"
-                placeholder="Search apps by name, description, note, or referenced variables..."
+                placeholder="Search apps by name, description, group, tags, note, or referenced variables..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 InputProps={{
@@ -2332,6 +2439,30 @@ export const AppsPage: React.FC = () => {
                   ))}
                 </Select>
               </FormControl>
+
+              {appGroups.length > 0 && (
+                <FormControl size="small" sx={{ minWidth: 160 }}>
+                  <InputLabel>Group</InputLabel>
+                  <Select
+                    value={groupFilter}
+                    label="Group"
+                    onChange={(e) => updateQueryParam({ group: e.target.value })}
+                  >
+                    <MenuItem value="all">All Groups</MenuItem>
+                    {appGroups.map((grp) => {
+                      const count = workloadApps.filter((a) => (a.group || "").trim() === grp).length;
+                      return (
+                        <MenuItem key={grp} value={grp}>
+                          {grp} ({count})
+                        </MenuItem>
+                      );
+                    })}
+                    {ungroupedAppsCount > 0 && (
+                      <MenuItem value="ungrouped">Ungrouped ({ungroupedAppsCount})</MenuItem>
+                    )}
+                  </Select>
+                </FormControl>
+              )}
 
               <Box sx={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 1 }}>
                 <Button
@@ -2363,8 +2494,8 @@ export const AppsPage: React.FC = () => {
               </Box>
             </Box>
 
-            {/* Clickable Groups Filter Chips */}
-            {appGroups.length > 0 && (
+            {/* Clickable Tags Filter Chips */}
+            {appTags.length > 0 && (
               <Box
                 sx={{
                   display: "flex",
@@ -2378,7 +2509,7 @@ export const AppsPage: React.FC = () => {
                 }}
               >
                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mr: 0.5 }}>
-                  <Bookmark size={14} color="#64748B" />
+                  <Tag size={14} color="#64748B" />
                   <Typography
                     variant="caption"
                     sx={{
@@ -2389,16 +2520,16 @@ export const AppsPage: React.FC = () => {
                       fontSize: "0.7rem",
                     }}
                   >
-                    Groups:
+                    Tags:
                   </Typography>
                 </Box>
 
                 <Chip
                   size="small"
                   label={`All (${workloadApps.length})`}
-                  onClick={() => handleSelectGroup("all")}
-                  color={groupFilter === "all" ? "primary" : "default"}
-                  variant={groupFilter === "all" ? "filled" : "outlined"}
+                  onClick={() => handleSelectTag("all")}
+                  color={tagFilter === "all" ? "primary" : "default"}
+                  variant={tagFilter === "all" ? "filled" : "outlined"}
                   clickable
                   sx={{
                     fontWeight: 600,
@@ -2406,7 +2537,7 @@ export const AppsPage: React.FC = () => {
                     height: 26,
                     cursor: "pointer",
                     transition: "all 0.15s ease",
-                    ...(groupFilter === "all"
+                    ...(tagFilter === "all"
                       ? {
                           bgcolor: "#4F46E5",
                           color: "#FFFFFF",
@@ -2421,15 +2552,17 @@ export const AppsPage: React.FC = () => {
                   }}
                 />
 
-                {appGroups.map((grp) => {
-                  const count = workloadApps.filter((a) => (a.group || "").trim() === grp).length;
-                  const isSelected = groupFilter.toLowerCase() === grp.toLowerCase();
+                {appTags.map((tag) => {
+                  const count = workloadApps.filter((a) =>
+                    a.tags?.some((t) => t.trim().toLowerCase() === tag.toLowerCase()),
+                  ).length;
+                  const isSelected = tagFilter.toLowerCase() === tag.toLowerCase();
                   return (
                     <Chip
-                      key={grp}
+                      key={tag}
                       size="small"
-                      label={`${grp} (${count})`}
-                      onClick={() => handleSelectGroup(grp)}
+                      label={`${tag} (${count})`}
+                      onClick={() => handleSelectTag(tag)}
                       color={isSelected ? "primary" : "default"}
                       variant={isSelected ? "filled" : "outlined"}
                       clickable
@@ -2456,13 +2589,13 @@ export const AppsPage: React.FC = () => {
                   );
                 })}
 
-                {ungroupedAppsCount > 0 && (
+                {untaggedAppsCount > 0 && (
                   <Chip
                     size="small"
-                    label={`Ungrouped (${ungroupedAppsCount})`}
-                    onClick={() => handleSelectGroup("ungrouped")}
-                    color={groupFilter === "ungrouped" ? "primary" : "default"}
-                    variant={groupFilter === "ungrouped" ? "filled" : "outlined"}
+                    label={`Untagged (${untaggedAppsCount})`}
+                    onClick={() => handleSelectTag("untagged")}
+                    color={tagFilter === "untagged" ? "primary" : "default"}
+                    variant={tagFilter === "untagged" ? "filled" : "outlined"}
                     clickable
                     sx={{
                       fontWeight: 600,
@@ -2471,7 +2604,7 @@ export const AppsPage: React.FC = () => {
                       cursor: "pointer",
                       transition: "all 0.15s ease",
                       fontStyle: "italic",
-                      ...(groupFilter === "ungrouped"
+                      ...(tagFilter === "untagged"
                         ? {
                             bgcolor: "#4F46E5",
                             color: "#FFFFFF",
@@ -2710,6 +2843,22 @@ export const AppsPage: React.FC = () => {
                                 >
                                   {app.name}
                                 </Typography>
+                                <Tooltip title={isFavourite(app.tags) ? "Remove from favourites" : "Add to favourites"}>
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => handleToggleFavourite(app, e)}
+                                    sx={{
+                                      p: 0.3,
+                                      color: isFavourite(app.tags) ? "#F59E0B" : "#CBD5E1",
+                                      "&:hover": {
+                                        color: "#F59E0B",
+                                        bgcolor: "#FFFBEB",
+                                      },
+                                    }}
+                                  >
+                                    <Star size={13} fill={isFavourite(app.tags) ? "#F59E0B" : "none"} />
+                                  </IconButton>
+                                </Tooltip>
                                 <Tooltip title="App Details">
                                   <IconButton
                                     size="small"
@@ -2851,6 +3000,32 @@ export const AppsPage: React.FC = () => {
                                 />
                               </Tooltip>
                             )}
+                            {app.tags &&
+                              app.tags.map((tag) => (
+                                <Tooltip key={tag} title={`Filter by tag: ${tag}`} arrow>
+                                  <Chip
+                                    size="small"
+                                    icon={<Tag size={10} />}
+                                    label={tag}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleSelectTag(tag);
+                                    }}
+                                    sx={{
+                                      height: 20,
+                                      fontSize: "0.68rem",
+                                      fontWeight: 600,
+                                      bgcolor:
+                                        tagFilter.toLowerCase() === tag.toLowerCase() ? "#E0E7FF" : "#EEF2FF",
+                                      color: "#4338CA",
+                                      border: "1px solid #C7D2FE",
+                                      cursor: "pointer",
+                                      "& .MuiChip-icon": { color: "#4338CA" },
+                                      "&:hover": { bgcolor: "#E0E7FF" },
+                                    }}
+                                  />
+                                </Tooltip>
+                              ))}
                           </Box>
                         </TableCell>
 
@@ -3228,6 +3403,19 @@ export const AppsPage: React.FC = () => {
                               >
                                 {app.name}
                               </Typography>
+                              <Tooltip title={isFavourite(app.tags) ? "Remove from favourites" : "Add to favourites"}>
+                                <IconButton
+                                  size="small"
+                                  onClick={(e) => handleToggleFavourite(app, e)}
+                                  sx={{
+                                    p: 0.25,
+                                    color: isFavourite(app.tags) ? "#F59E0B" : "#CBD5E1",
+                                    "&:hover": { color: "#F59E0B", bgcolor: "#FFFBEB" },
+                                  }}
+                                >
+                                  <Star size={14} fill={isFavourite(app.tags) ? "#F59E0B" : "none"} />
+                                </IconButton>
+                              </Tooltip>
                               <Tooltip title="Rename App">
                                 <IconButton
                                   size="small"
@@ -3319,6 +3507,32 @@ export const AppsPage: React.FC = () => {
                                   />
                                 </Tooltip>
                               )}
+                              {app.tags &&
+                                app.tags.map((tag) => (
+                                  <Tooltip key={tag} title={`Filter by tag: ${tag}`} arrow>
+                                    <Chip
+                                      size="small"
+                                      icon={<Tag size={10} />}
+                                      label={tag}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleSelectTag(tag);
+                                      }}
+                                      sx={{
+                                        height: 20,
+                                        fontSize: "0.68rem",
+                                        fontWeight: 600,
+                                        bgcolor:
+                                          tagFilter.toLowerCase() === tag.toLowerCase() ? "#E0E7FF" : "#EEF2FF",
+                                        color: "#4338CA",
+                                        border: "1px solid #C7D2FE",
+                                        cursor: "pointer",
+                                        "& .MuiChip-icon": { color: "#4338CA" },
+                                        "&:hover": { bgcolor: "#E0E7FF" },
+                                      }}
+                                    />
+                                  </Tooltip>
+                                ))}
                             </Box>
                           </Box>
                         </Box>
@@ -3844,7 +4058,7 @@ export const AppsPage: React.FC = () => {
             >
               <TextField
                 size="small"
-                placeholder="Search scripts by name, description, group..."
+                placeholder="Search scripts by name, description, group, tags..."
                 value={scriptSearch}
                 type="search"
                 onChange={(e) => setScriptSearch(e.target.value)}
@@ -3876,10 +4090,34 @@ export const AppsPage: React.FC = () => {
                 </Select>
               </FormControl>
 
+              {scriptGroups.length > 0 && (
+                <FormControl size="small" sx={{ minWidth: 160 }}>
+                  <InputLabel>Group</InputLabel>
+                  <Select
+                    value={groupFilter}
+                    label="Group"
+                    onChange={(e) => updateQueryParam({ group: e.target.value })}
+                  >
+                    <MenuItem value="all">All Groups</MenuItem>
+                    {scriptGroups.map((grp) => {
+                      const count = scriptApps.filter((a) => (a.group || "").trim() === grp).length;
+                      return (
+                        <MenuItem key={grp} value={grp}>
+                          {grp} ({count})
+                        </MenuItem>
+                      );
+                    })}
+                    {ungroupedScriptsCount > 0 && (
+                      <MenuItem value="ungrouped">Ungrouped ({ungroupedScriptsCount})</MenuItem>
+                    )}
+                  </Select>
+                </FormControl>
+              )}
+
               <Button
                 size="small"
                 onClick={handleClearScriptFilters}
-                disabled={!scriptSearch && nodeFilter === "all" && groupFilter === "all"}
+                disabled={!scriptSearch && nodeFilter === "all" && groupFilter === "all" && tagFilter === "all"}
                 startIcon={<X size={14} />}
                 sx={{ textTransform: "none", color: "#64748B", fontSize: "0.78rem" }}
               >
@@ -3887,8 +4125,8 @@ export const AppsPage: React.FC = () => {
               </Button>
             </Box>
 
-            {/* Clickable Groups Filter Chips */}
-            {scriptGroups.length > 0 && (
+            {/* Clickable Tags Filter Chips */}
+            {scriptTags.length > 0 && (
               <Box
                 sx={{
                   display: "flex",
@@ -3902,7 +4140,7 @@ export const AppsPage: React.FC = () => {
                 }}
               >
                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mr: 0.5 }}>
-                  <Bookmark size={14} color="#0F766E" />
+                  <Tag size={14} color="#0F766E" />
                   <Typography
                     variant="caption"
                     sx={{
@@ -3913,16 +4151,16 @@ export const AppsPage: React.FC = () => {
                       fontSize: "0.7rem",
                     }}
                   >
-                    Groups:
+                    Tags:
                   </Typography>
                 </Box>
 
                 <Chip
                   size="small"
                   label={`All (${scriptApps.length})`}
-                  onClick={() => updateQueryParam({ group: "all" })}
-                  color={groupFilter === "all" ? "primary" : "default"}
-                  variant={groupFilter === "all" ? "filled" : "outlined"}
+                  onClick={() => updateQueryParam({ tag: "all" })}
+                  color={tagFilter === "all" ? "primary" : "default"}
+                  variant={tagFilter === "all" ? "filled" : "outlined"}
                   clickable
                   sx={{
                     fontWeight: 600,
@@ -3930,7 +4168,7 @@ export const AppsPage: React.FC = () => {
                     height: 26,
                     cursor: "pointer",
                     transition: "all 0.15s ease",
-                    ...(groupFilter === "all"
+                    ...(tagFilter === "all"
                       ? {
                           bgcolor: "#0F766E",
                           color: "#FFFFFF",
@@ -3945,15 +4183,17 @@ export const AppsPage: React.FC = () => {
                   }}
                 />
 
-                {scriptGroups.map((grp) => {
-                  const count = scriptApps.filter((a) => (a.group || "").trim() === grp).length;
-                  const isSelected = groupFilter.toLowerCase() === grp.toLowerCase();
+                {scriptTags.map((tag) => {
+                  const count = scriptApps.filter((a) =>
+                    a.tags?.some((t) => t.trim().toLowerCase() === tag.toLowerCase()),
+                  ).length;
+                  const isSelected = tagFilter.toLowerCase() === tag.toLowerCase();
                   return (
                     <Chip
-                      key={grp}
+                      key={tag}
                       size="small"
-                      label={`${grp} (${count})`}
-                      onClick={() => updateQueryParam({ group: isSelected ? "all" : grp })}
+                      label={`${tag} (${count})`}
+                      onClick={() => updateQueryParam({ tag: isSelected ? "all" : tag })}
                       color={isSelected ? "primary" : "default"}
                       variant={isSelected ? "filled" : "outlined"}
                       clickable
@@ -3980,13 +4220,13 @@ export const AppsPage: React.FC = () => {
                   );
                 })}
 
-                {ungroupedScriptsCount > 0 && (
+                {untaggedScriptsCount > 0 && (
                   <Chip
                     size="small"
-                    label={`Ungrouped (${ungroupedScriptsCount})`}
-                    onClick={() => handleSelectGroup("ungrouped")}
-                    color={groupFilter === "ungrouped" ? "primary" : "default"}
-                    variant={groupFilter === "ungrouped" ? "filled" : "outlined"}
+                    label={`Untagged (${untaggedScriptsCount})`}
+                    onClick={() => handleSelectTag("untagged")}
+                    color={tagFilter === "untagged" ? "primary" : "default"}
+                    variant={tagFilter === "untagged" ? "filled" : "outlined"}
                     clickable
                     sx={{
                       fontWeight: 600,
@@ -3995,7 +4235,7 @@ export const AppsPage: React.FC = () => {
                       cursor: "pointer",
                       transition: "all 0.15s ease",
                       fontStyle: "italic",
-                      ...(groupFilter === "ungrouped"
+                      ...(tagFilter === "untagged"
                         ? {
                             bgcolor: "#0F766E",
                             color: "#FFFFFF",
@@ -4154,19 +4394,36 @@ export const AppsPage: React.FC = () => {
                               <Terminal size={17} />
                             </Box>
                             <Box sx={{ minWidth: 0 }}>
-                              <Typography
-                                variant="body2"
-                                onClick={() => setDetailsApp(script)}
-                                sx={{
-                                  fontWeight: 700,
-                                  color: "#0F766E",
-                                  lineHeight: 1.2,
-                                  cursor: "pointer",
-                                  "&:hover": { textDecoration: "underline" },
-                                }}
-                              >
-                                {script.name}
-                              </Typography>
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 0.4 }}>
+                                <Typography
+                                  variant="body2"
+                                  onClick={() => setDetailsApp(script)}
+                                  sx={{
+                                    fontWeight: 700,
+                                    color: "#0F766E",
+                                    lineHeight: 1.2,
+                                    cursor: "pointer",
+                                    "&:hover": { textDecoration: "underline" },
+                                  }}
+                                >
+                                  {script.name}
+                                </Typography>
+                                <Tooltip
+                                  title={isFavourite(script.tags) ? "Remove from favourites" : "Add to favourites"}
+                                >
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => handleToggleFavourite(script, e)}
+                                    sx={{
+                                      p: 0.25,
+                                      color: isFavourite(script.tags) ? "#F59E0B" : "#CBD5E1",
+                                      "&:hover": { color: "#F59E0B", bgcolor: "#FFFBEB" },
+                                    }}
+                                  >
+                                    <Star size={13} fill={isFavourite(script.tags) ? "#F59E0B" : "none"} />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
                               <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, mt: 0.3, flexWrap: "wrap" }}>
                                 {script.group && (
                                   <Chip
@@ -4199,6 +4456,34 @@ export const AppsPage: React.FC = () => {
                                     }}
                                   />
                                 )}
+                                {script.tags &&
+                                  script.tags.map((tag) => (
+                                    <Chip
+                                      key={tag}
+                                      size="small"
+                                      icon={<Tag size={10} />}
+                                      label={tag}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleSelectTag(tag);
+                                      }}
+                                      clickable
+                                      sx={{
+                                        height: 18,
+                                        fontSize: "0.65rem",
+                                        fontWeight: 600,
+                                        bgcolor:
+                                          tagFilter.toLowerCase() === tag.trim().toLowerCase()
+                                            ? "#CCFBF1"
+                                            : "#F0FDFA",
+                                        color: "#0F766E",
+                                        border: "1px solid #99F6E4",
+                                        cursor: "pointer",
+                                        "& .MuiChip-icon": { color: "#0F766E" },
+                                        "&:hover": { bgcolor: "#CCFBF1" },
+                                      }}
+                                    />
+                                  ))}
                               </Box>
                             </Box>
                           </Box>
@@ -5159,6 +5444,15 @@ export const AppsPage: React.FC = () => {
                     helperText="Category used to organize and filter apps in the apps list"
                   />
                 )}
+              />
+
+              <TextField
+                fullWidth
+                label="Tags (comma-separated, optional)"
+                placeholder="e.g. prod, monitoring, edge"
+                value={formTags}
+                onChange={(e) => setFormTags(e.target.value)}
+                helperText="Optional tags used to organize and filter apps and scripts"
               />
 
               <TextField

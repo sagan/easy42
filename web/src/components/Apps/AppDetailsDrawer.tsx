@@ -205,6 +205,24 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
                 }}
               />
             )}
+            {app.tags &&
+              app.tags.map((tag) => (
+                <Chip
+                  key={tag}
+                  size="small"
+                  icon={<Tag size={12} />}
+                  label={tag}
+                  sx={{
+                    height: 22,
+                    fontSize: "0.72rem",
+                    fontWeight: 600,
+                    bgcolor: "#EEF2FF",
+                    color: "#4338CA",
+                    border: "1px solid #C7D2FE",
+                    "& .MuiChip-icon": { color: "#4338CA" },
+                  }}
+                />
+              ))}
             {status && (
               <Chip
                 size="small"

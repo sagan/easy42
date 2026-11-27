@@ -431,6 +431,9 @@ const ConfigChangeJSONSchema = `{
         "name": { "type": "string", "pattern": "^[a-zA-Z0-9_-]+$", "minLength": 1, "maxLength": 64 },
         "description": { "type": "string" },
         "group": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "tags_add": { "type": "array", "items": { "type": "string" } },
+        "tags_del": { "type": "array", "items": { "type": "string" } },
         "note": { "type": "string" },
         "url": { "type": "string" },
         "version": { "type": "string" },
@@ -563,6 +566,9 @@ type AppPatch struct {
 	Name        string             `json:"name" yaml:"name"`
 	Description *string            `json:"description,omitempty" yaml:"description,omitempty"`
 	Group       *string            `json:"group,omitempty" yaml:"group,omitempty"`
+	Tags        *[]string          `json:"tags,omitempty" yaml:"tags,omitempty"`
+	TagsAdd     *[]string          `json:"tags_add,omitempty" yaml:"tags_add,omitempty"`
+	TagsDel     *[]string          `json:"tags_del,omitempty" yaml:"tags_del,omitempty"`
 	Note        *string            `json:"note,omitempty" yaml:"note,omitempty"`
 	URL         *string            `json:"url,omitempty" yaml:"url,omitempty"`
 	Version     *string            `json:"version,omitempty" yaml:"version,omitempty"`

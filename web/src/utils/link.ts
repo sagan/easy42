@@ -35,7 +35,7 @@ export function isSameLink(a?: Link | null, b?: Link | null): boolean {
 
 /**
  * Helper to determine whether a link is a virtual link (existing physical or logical direct link,
- * unmanaged by easy42 control plane).
+ * unmanaged by Easy42 control plane).
  */
 export function isVirtualLink(
   link?: {
